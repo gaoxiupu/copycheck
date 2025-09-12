@@ -60,18 +60,24 @@
                 </div>
                 <div class="settings-content">
                     <div class="settings-group">
-                        <h2>🔑 智谱AI API配置</h2>
+                        <h2>🔑 API配置</h2>
                         <div class="form-field">
                             <label for="api-key">API Key:</label>
-                            <input type="password" id="api-key" placeholder="请输入你的智谱AI API Key">
+                            <input type="password" id="api-key" placeholder="请输入API Key">
                         </div>
                         <div class="form-field">
                             <label for="model-select">模型选择:</label>
                             <select id="model-select">
-                                <option value="glm-4">GLM-4</option>
-                                <option value="glm-4.5">glm-4.5</option>
-                                <option value="glm-4.5-air">GLM-4.5-Air</option>
-                                <option value="glm-4.5v">GLM-4.5V</option>
+                                <optgroup label="智谱AI">
+                                    <option value="glm-4">GLM-4</option>
+                                    <option value="glm-4.5">glm-4.5</option>
+                                    <option value="glm-4.5-air">GLM-4.5-Air</option>
+                                    <option value="glm-4.5v">GLM-4.5V</option>
+                                </optgroup>
+                                <optgroup label="Google Gemini">
+                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+                                </optgroup>
                             </select>
                         </div>
                         <button id="save-settings-btn">保存设置</button>

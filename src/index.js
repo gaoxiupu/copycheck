@@ -117,6 +117,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateProgressStep('preprocess', 'in-progress');
                 updateProgressStep('preprocess', 'done');
                 updateProgressStep('analyze', 'in-progress');
+                console.log('=== 传递给AI的文案内容 ===');
+                console.log('文本长度:', response.text.length, '字符');
+                console.log('文本预览 (前500字符):', response.text.substring(0, 500));
+                console.log('完整文本内容:', response.text);
+                
                 chrome.runtime.sendMessage({ action: "performCheck", text: response.text }, (aiResponse) => {
                     if (handleError(`检查失败: ${aiResponse?.message || '未知错误'}`, chrome.runtime.lastError || !aiResponse || aiResponse.error)) return;
                     updateProgressStep('analyze', 'done');
