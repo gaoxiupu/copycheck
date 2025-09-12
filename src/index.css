@@ -1,0 +1,181 @@
+:root {
+    --background: hsl(0 0% 100%);
+    --foreground: hsl(222.2 84% 4.9%);
+    --card: hsl(0 0% 100%);
+    --card-foreground: hsl(222.2 84% 4.9%);
+    --primary: hsl(222.2 47.4% 11.2%);
+    --primary-foreground: hsl(210 40% 98%);
+    --secondary: hsl(210 40% 96.1%);
+    --secondary-foreground: hsl(222.2 47.4% 11.2%);
+    --muted: hsl(210 40% 96.1%);
+    --muted-foreground: hsl(215.4 16.3% 46.9%);
+    --accent: hsl(210 40% 96.1%);
+    --border: hsl(214.3 31.8% 91.4%);
+    --input: hsl(214.3 31.8% 91.4%);
+    --radius: 0.5rem;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    margin: 0;
+    padding: 0;
+    background-color: var(--background);
+    color: var(--foreground);
+}
+
+.container {
+    padding: 1rem;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.5rem;
+}
+
+.header h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+#main-content {
+    padding: 1rem 0;
+}
+
+#unconfigured-view, #idle-view {
+    text-align: center;
+}
+
+#unconfigured-view h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    border-radius: calc(var(--radius) - 2px);
+    font-size: 0.9rem;
+    font-weight: 500;
+    padding: 0.6rem 1rem;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.icon-button {
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
+    padding: 0.25rem;
+    color: var(--muted-foreground);
+}
+.icon-button:hover {
+    color: var(--foreground);
+}
+
+button#start-check, button#go-to-settings-from-unconfigured-btn, button#save-settings-btn {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    width: 100%;
+}
+
+button#start-check:hover, button#go-to-settings-from-unconfigured-btn:hover, button#save-settings-btn:hover {
+    background-color: hsl(222.2 47.4% 21.2%);
+}
+
+/* Various Views */
+#results-view, #settings-view {
+    text-align: left;
+}
+
+.results-header, .settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 0.75rem;
+    margin-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.results-header h3, .settings-header h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.results-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+#results-summary {
+    padding: 0.75rem 0;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+#results-list { padding-top: 1rem; }
+
+.issue-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.issue-card h4 { margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600; }
+.issue-card p { margin: 0.25rem 0; font-size: 0.875rem; color: var(--muted-foreground); line-height: 1.4; }
+.issue-card .label { font-weight: 500; color: var(--card-foreground); }
+.issue-card.severity-严重 { border-left: 4px solid hsl(0, 72%, 51%); }
+.issue-card.severity-中等 { border-left: 4px solid hsl(38, 92%, 50%); }
+.issue-card.severity-轻微 { border-left: 4px solid hsl(221, 83%, 53%); }
+
+/* Filters & Buttons */
+.filter-container { padding: 0.75rem 0; border-bottom: 1px solid var(--border); }
+.filter-label { font-size: 0.85rem; font-weight: 600; color: var(--foreground); margin: 0.5rem 0 0.5rem 0; width: 100%; }
+.filter-button-group { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.filter-button { background-color: var(--secondary); color: var(--secondary-foreground); padding: 0.25rem 0.75rem; font-size: 0.8rem; border-radius: var(--radius); border: 1px solid transparent; }
+.filter-button:hover { background-color: hsl(210, 40%, 92.1%); }
+.filter-button.active { background-color: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.secondary-button { background-color: var(--secondary); color: var(--secondary-foreground); }
+.secondary-button:hover { background-color: hsl(210, 40%, 92.1%); }
+
+/* In Progress View */
+#in-progress-view { text-align: center; }
+.progress-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1.5rem; }
+.progress-steps { list-style: none; padding: 0; margin: 0 0 1.5rem 0; text-align: left; }
+.progress-steps li { padding: 0.5rem 0; font-size: 0.9rem; color: var(--muted-foreground); transition: all 0.3s ease; opacity: 0.5; }
+.progress-steps li::before { content: '⏳'; margin-right: 0.75rem; display: inline-block; }
+.progress-steps li.in-progress { color: var(--foreground); opacity: 1; }
+.progress-steps li.in-progress::before { content: '🔄'; animation: spin 1s linear infinite; }
+.progress-steps li.done { color: var(--foreground); opacity: 1; }
+.progress-steps li.done::before { content: '✅'; animation: none; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Recent Checks */
+.recent-checks-container { margin-top: 2rem; text-align: left; }
+.recent-checks-title { font-size: 0.9rem; font-weight: 600; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border); }
+.recent-checks-list { list-style: none; padding: 0; margin: 0.5rem 0 0 0; }
+.recent-check-item { padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--border); cursor: pointer; transition: background-color 0.2s ease-in-out; }
+.recent-check-item:hover { background-color: var(--accent); }
+.recent-check-item:last-child { border-bottom: none; }
+.recent-check-item .recent-check-title { display: block; font-weight: 500; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.recent-check-item .recent-check-meta { display: block; font-size: 0.8rem; color: var(--muted-foreground); margin-top: 0.25rem; }
+
+/* Settings View */
+.settings-content { padding-top: 1rem; }
+.settings-group h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }
+.form-field { margin-bottom: 1.25rem; }
+.form-field label { display: block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.9rem; }
+.form-field input, .form-field select { width: 100%; padding: 0.6rem 0.75rem; box-sizing: border-box; border: 1px solid var(--input); border-radius: calc(var(--radius) - 2px); background-color: var(--background); color: var(--foreground); font-size: 0.9rem; }
+#status-message { margin-top: 1rem; font-size: 0.9rem; }

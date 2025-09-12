@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PagePilot</title>
+    <link rel="stylesheet" href="index.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>PagePilot</h1>
+            <button id="go-to-settings-btn" class="icon-button">⚙️</button>
+        </div>
+        <div id="main-content">
+            <!-- Unconfigured View -->
+            <div id="unconfigured-view">
+                <h2>🚨 需要配置</h2>
+                <p>请先配置智谱AI API Key以开始使用</p>
+                <button id="go-to-settings-from-unconfigured-btn">设置 API Key</button>
+            </div>
+
+            <!-- Idle View -->
+            <div id="idle-view" style="display: none;">
+                 <button id="start-check">开始检查当前页面</button>
+                 <div id="recent-checks-container" class="recent-checks-container"></div>
+            </div>
+
+            <!-- In Progress View -->
+            <div id="in-progress-view" style="display: none;">
+                <h3 class="progress-title">正在检查...</h3>
+                <ul id="progress-steps" class="progress-steps">
+                    <li id="step-extract">提取页面内容...</li>
+                    <li id="step-preprocess">文本预处理...</li>
+                    <li id="step-analyze">AI智能分析...</li>
+                    <li id="step-report">生成报告...</li>
+                </ul>
+                <button id="cancel-check" class="secondary-button">取消检查</button>
+            </div>
+
+            <!-- Results View -->
+            <div id="results-view" style="display: none;">
+                <div class="results-header">
+                    <h3>检查结果</h3>
+                    <div class="results-actions">
+                        <button id="export-csv-button" class="secondary-button">导出CSV</button>
+                        <button id="back-to-idle">< 返回</button>
+                    </div>
+                </div>
+                <div id="results-summary"></div>
+                <div id="results-filter-container" class="filter-container"></div>
+                <div id="results-list"></div>
+            </div>
+
+            <!-- Settings View -->
+            <div id="settings-view" style="display: none;">
+                <div class="settings-header">
+                    <h3>设置</h3>
+                    <button id="back-to-idle-from-settings" class="secondary-button">< 返回</button>
+                </div>
+                <div class="settings-content">
+                    <div class="settings-group">
+                        <h2>🔑 智谱AI API配置</h2>
+                        <div class="form-field">
+                            <label for="api-key">API Key:</label>
+                            <input type="password" id="api-key" placeholder="请输入你的智谱AI API Key">
+                        </div>
+                        <div class="form-field">
+                            <label for="model-select">模型选择:</label>
+                            <select id="model-select">
+                                <option value="glm-4">GLM-4</option>
+                                <option value="glm-4.5">glm-4.5</option>
+                                <option value="glm-4.5-air">GLM-4.5-Air</option>
+                                <option value="glm-4.5v">GLM-4.5V</option>
+                            </select>
+                        </div>
+                        <button id="save-settings-btn">保存设置</button>
+                        <p id="status-message"></p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    <script src="index.js"></script>
+</body>
+</html>
