@@ -3,91 +3,86 @@
 function extractVisibleText() {
     const uniqueTexts = new Set();
     const processedElements = new WeakSet();
-    
-    // Helper function to check if text is substantially unique
-    function isSubstantiallyUnique(text, existingTexts) {
-        const cleanText = text.toLowerCase().trim();
-        return !Array.from(existingTexts).some(existing => {
-            const cleanExisting = existing.toLowerCase().trim();
-            // Check if one text is mostly contained within another (>80% overlap)
-            if (cleanText.length > cleanExisting.length) {
-                return cleanExisting.length / cleanText.length > 0.8 && cleanText.includes(cleanExisting);
-            } else {
-                return cleanText.length / cleanExisting.length > 0.8 && cleanExisting.includes(cleanText);
+
+    // Function to check if an element or its ancestors have been processed
+    function isAlreadyProcessed(el) {
+        let current = el;
+        while (current) {
+            if (processedElements.has(current)) {
+                return true;
             }
-        });
+            current = current.parentElement;
+        }
+        return false;
     }
-    
+
     // Helper function to should skip element based on class or content
     function shouldSkipElement(el) {
         const skipClasses = ['nav', 'navigation', 'menu', 'footer', 'copyright', 'social', 'newsletter', 'header', 'banner', 'sidebar'];
-        const className = el.className.toLowerCase();
-        
+        // Use optional chaining for safety, though className should exist.
+        const className = el.className?.toLowerCase() || '';
+
         // Skip by class name
         if (skipClasses.some(cls => className.includes(cls))) {
             return true;
         }
-        
-        // Skip if contains mostly navigation links or short phrases
-        const text = el.innerText.trim();
-        if (text.length < 10) return true;
-        
-        // Skip if contains mostly repeated single words or numbers
-        const words = text.split(/\s+/);
-        if (words.length <= 2 && words.every(word => word.length <= 5)) return true;
+
+        const text = el.innerText?.trim();
+        if (!text || text.length < 20) return true; // Skip elements with very short text
+
+        // Skip if it's likely a container with just a few short links
+        const links = el.querySelectorAll('a');
+        if (links.length > 3 && text.length < 100) {
+            const linkTextLength = Array.from(links).reduce((acc, a) => acc + a.innerText.length, 0);
+            if (linkTextLength / text.length > 0.8) {
+                return true;
+            }
+        }
         
         return false;
     }
-    
-    // Get text from standard HTML elements first
-    const standardElements = document.body.querySelectorAll('h1, h2, h3, h4, h5, h6, p, li, span, a, button, label, td, th');
-    standardElements.forEach(el => {
-        if (processedElements.has(el)) return;
+
+    // Select a broad range of potential content-holding elements
+    const candidateElements = document.body.querySelectorAll('div, section, article, main, p, h1, h2, h3');
+
+    candidateElements.forEach(el => {
+        // If this element or any of its parents have been processed, skip it.
+        if (isAlreadyProcessed(el)) {
+            return;
+        }
+
+        // Skip elements that are likely not main content
+        if (shouldSkipElement(el)) {
+            processedElements.add(el); // Mark as processed so we don't check its children
+            return;
+        }
         
-        const text = el.innerText.trim();
-        if (text && !shouldSkipElement(el) && isSubstantiallyUnique(text, uniqueTexts)) {
-            uniqueTexts.add(text);
-            processedElements.add(el);
+        const text = el.innerText?.trim();
+
+        if (text) {
+            // Before adding, check if this exact text is already there.
+            // This is a final safeguard.
+            const cleanText = text.replace(/\s+/g, ' ').trim();
+            if (!uniqueTexts.has(cleanText)) {
+                 uniqueTexts.add(cleanText);
+                 // Mark the element as processed to avoid processing its children or itself again.
+                 processedElements.add(el);
+            }
         }
     });
-    
-    // Get text from main content areas (div elements with content)
-    const contentDivs = document.body.querySelectorAll('div');
-    contentDivs.forEach(el => {
-        if (processedElements.has(el)) return;
-        
-        const text = el.innerText.trim();
-        if (!text || text.length < 20) return; // Skip very short content
-        
-        if (shouldSkipElement(el)) return;
-        
-        // For divs, be more selective to avoid nested duplicates
-        const hasSubstantialContent = text.length > 30 && text.split('\n').length >= 2;
-        if (hasSubstantialContent && isSubstantiallyUnique(text, uniqueTexts)) {
-            uniqueTexts.add(text);
-            processedElements.add(el);
-        }
-    });
-    
+
     // Get text from meta tags
     const title = document.title;
     if (title) {
         uniqueTexts.add(`(Page Title: ${title})`);
     }
-    
+
     const description = document.querySelector('meta[name="description"]');
     if (description && description.content) {
         uniqueTexts.add(`(Meta Description: ${description.content})`);
     }
 
-    // Convert to array and filter out any remaining near-duplicates
-    const finalTexts = Array.from(uniqueTexts).filter((text, index, array) => {
-        return array.findIndex(t => 
-            t.toLowerCase().trim() === text.toLowerCase().trim()
-        ) === index;
-    });
-
-    return finalTexts.join('\n');
+    return Array.from(uniqueTexts).join('\n');
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
