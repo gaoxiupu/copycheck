@@ -1,88 +1,52 @@
 // This script is injected into the page to extract text.
 
 function extractVisibleText() {
-    const uniqueTexts = new Set();
-    const processedElements = new WeakSet();
+    const shouldSkipElement = (el) => {
+        if (!el || !el.tagName) return true;
+        const skipTags = ['script', 'style', 'noscript', 'iframe', 'head'];
+        if (skipTags.includes(el.tagName.toLowerCase())) return true;
 
-    // Function to check if an element or its ancestors have been processed
-    function isAlreadyProcessed(el) {
-        let current = el;
-        while (current) {
-            if (processedElements.has(current)) {
-                return true;
-            }
-            current = current.parentElement;
-        }
-        return false;
-    }
-
-    // Helper function to should skip element based on class or content
-    function shouldSkipElement(el) {
-        const skipClasses = ['nav', 'navigation', 'menu', 'footer', 'copyright', 'social', 'newsletter', 'header', 'banner', 'sidebar'];
-        // Use optional chaining for safety, though className should exist.
+        const skipClasses = ['nav', 'navigation', 'menu', 'footer', 'copyright', 'social', 'newsletter', 'header', 'banner', 'sidebar', 'advertisement', 'ad'];
         const className = el.className?.toLowerCase() || '';
-
-        // Skip by class name
         if (skipClasses.some(cls => className.includes(cls))) {
             return true;
         }
+        // Skip invisible elements
+        return el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0;
+    };
 
-        const text = el.innerText?.trim();
-        if (!text || text.length < 20) return true; // Skip elements with very short text
+    const getOwnText = (node) => {
+        const clone = node.cloneNode(true);
+        Array.from(clone.children).forEach(child => clone.removeChild(child));
+        return clone.textContent.replace(/\s+/g, ' ').trim();
+    };
+    
+    const extractedContent = [];
+    const seenTexts = new Set();
 
-        // Skip if it's likely a container with just a few short links
-        const links = el.querySelectorAll('a');
-        if (links.length > 3 && text.length < 100) {
-            const linkTextLength = Array.from(links).reduce((acc, a) => acc + a.innerText.length, 0);
-            if (linkTextLength / text.length > 0.8) {
-                return true;
-            }
-        }
-        
-        return false;
-    }
-
-    // Select a broad range of potential content-holding elements
-    const candidateElements = document.body.querySelectorAll('div, section, article, main, p, h1, h2, h3');
-
-    candidateElements.forEach(el => {
-        // If this element or any of its parents have been processed, skip it.
-        if (isAlreadyProcessed(el)) {
+    const traverse = (node, isRoot = false) => {
+        // Don't skip the root node based on visibility checks
+        if (!isRoot && shouldSkipElement(node)) {
             return;
         }
 
-        // Skip elements that are likely not main content
-        if (shouldSkipElement(el)) {
-            processedElements.add(el); // Mark as processed so we don't check its children
-            return;
+        const ownText = getOwnText(node);
+        if (ownText && ownText.length > 2 && !seenTexts.has(ownText)) {
+            extractedContent.push({ tag: node.tagName.toLowerCase(), text: ownText });
+            seenTexts.add(ownText);
         }
-        
-        const text = el.innerText?.trim();
 
-        if (text) {
-            // Before adding, check if this exact text is already there.
-            // This is a final safeguard.
-            const cleanText = text.replace(/\s+/g, ' ').trim();
-            if (!uniqueTexts.has(cleanText)) {
-                 uniqueTexts.add(cleanText);
-                 // Mark the element as processed to avoid processing its children or itself again.
-                 processedElements.add(el);
-            }
+        if (node.childNodes) {
+            node.childNodes.forEach(child => {
+                if (child.nodeType === Node.ELEMENT_NODE) {
+                    traverse(child);
+                }
+            });
         }
-    });
+    };
 
-    // Get text from meta tags
-    const title = document.title;
-    if (title) {
-        uniqueTexts.add(`(Page Title: ${title})`);
-    }
-
-    const description = document.querySelector('meta[name="description"]');
-    if (description && description.content) {
-        uniqueTexts.add(`(Meta Description: ${description.content})`);
-    }
-
-    return Array.from(uniqueTexts).join('\n');
+    traverse(document.body, true); // Start with isRoot = true
+    return JSON.stringify(extractedContent, null, 2);
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {

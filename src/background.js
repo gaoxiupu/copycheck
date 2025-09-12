@@ -7,7 +7,9 @@ const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/
 // Let's stick to the simpler Bearer token method as per their docs.
 
 async function callZhipuAI(apiKey, model, text) {
-    const prompt = `请分析以下网页文本内容，并检查以下方面：
+    const prompt = `请分析以下网页文本内容，它以JSON数组格式提供。数组中的每个对象都包含一个“tag”（HTML标签）和一个“text”（文本内容）。请根据“tag”提供的上下文（例如，“h1”是主标题，“button”是可点击的按钮）来分析“text”中的问题。
+
+请检查以下方面：
 
 1. 拼写错误（如单词拼错：accessory 错误拼写成 accesory）
 2. 排版错误（如中英文、数字混排时的空格与符号不规范： 5V 应写为 5 V）
@@ -24,7 +26,7 @@ async function callZhipuAI(apiKey, model, text) {
   - "type": "拼写错误" | "排版错误" | "一致性问题" | "其他"
   - "severity": "严重" | "中等" | "轻微"
   - "description": 对问题的具体描述
-  - "location": 问题出现的位置（如DOM选择器；若无DOM信息，请用原始文本片段）
+  - "location": 问题出现的位置（请用原始文本片段）
   - "suggestion": 修改或优化建议
   请尽量覆盖所有发现的问题。
 
@@ -34,7 +36,7 @@ async function callZhipuAI(apiKey, model, text) {
     "type": "拼写错误",
     "severity": "中等",
     "description": "'登入' 可能是不规范用法，应为 '登录'",
-    "location": "header.login-button",
+    "location": "登录",
     "suggestion": "将 '登入' 修改为 '登录'"
   }
 ]
@@ -51,7 +53,7 @@ async function callZhipuAI(apiKey, model, text) {
                 model: model || "glm-4", // Use selected model, fallback to glm-4
                 messages: [
                     { role: "system", content: prompt },
-                    { role: "user", content: text }
+                    { role: "user", content: `网页内容的JSON数据如下:\n${text}` }
                 ],
                 stream: false, // We want the full response at once
                 response_format: { type: "json_object" } // Request JSON output
@@ -80,7 +82,9 @@ async function callZhipuAI(apiKey, model, text) {
 }
 
 async function callGeminiAI(apiKey, model, text) {
-    const prompt = `请分析以下网页文本内容，并检查以下方面：
+    const prompt = `请分析以下网页文本内容，它以JSON数组格式提供。数组中的每个对象都包含一个“tag”（HTML标签）和一个“text”（文本内容）。请根据“tag”提供的上下文（例如，“h1”是主标题，“button”是可点击的按钮）来分析“text”中的问题。
+
+请检查以下方面：
 
 1. 拼写错误（如单词拼错：accessory 错误拼写成 accesory）
 2. 排版错误（如中英文、数字混排时的空格与符号不规范： 5V 应写为 5 V）
@@ -93,7 +97,7 @@ async function callGeminiAI(apiKey, model, text) {
   - "type": "拼写错误" | "排版错误" | "一致性问题" | "其他"
   - "severity": "严重" | "中等" | "轻微"
   - "description": 对问题的具体描述
-  - "location": 问题出现的位置（如DOM选择器；若无DOM信息，请用原始文本片段）
+  - "location": 问题出现的位置（请用原始文本片段）
   - "suggestion": 修改或优化建议
   请尽量覆盖所有发现的问题。
 
@@ -103,7 +107,7 @@ async function callGeminiAI(apiKey, model, text) {
     "type": "拼写错误",
     "severity": "中等",
     "description": "'登入' 可能是不规范用法，应为 '登录'",
-    "location": "header.login-button",
+    "location": "登录",
     "suggestion": "将 '登入' 修改为 '登录'"
   }
 ]
@@ -126,7 +130,7 @@ async function callGeminiAI(apiKey, model, text) {
             body: JSON.stringify({
                 contents: [{
                     parts: [{
-                        text: `${prompt}\n\n网页文本内容:\n${text}`
+                        text: `${prompt}\n\n网页内容的JSON数据如下:\n${text}`
                     }]
                 }],
                 generationConfig: {
