@@ -1,11 +1,6 @@
 const ZHIPU_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
-// Function to generate a JWT token for Zhipu AI API
-// This is a simplified example. In a real-world scenario, you might need a library for JWT.
-// However, for Zhipu AI, the API Key is often used directly in the Authorization header.
-// Let's stick to the simpler Bearer token method as per their docs.
-
 async function callZhipuAI(apiKey, model, text) {
     const prompt = `请分析以下网页文本内容，它以JSON数组格式提供。数组中的每个对象都包含一个“tag”（HTML标签）和一个“text”（文本内容）。请根据“tag”提供的上下文（例如，“h1”是主标题，“button”是可点击的按钮）来分析“text”中的问题。
 
@@ -67,12 +62,7 @@ async function callZhipuAI(apiKey, model, text) {
         }
 
         const data = await response.json();
-        console.log("Raw AI Response:", data);
-        
-        // The actual content is in choices[0].message.content
         const content = data.choices[0].message.content;
-        
-        // The AI is asked to return a JSON string, so we need to parse it.
         return JSON.parse(content);
 
     } catch (error) {
@@ -146,16 +136,12 @@ async function callGeminiAI(apiKey, model, text) {
         }
 
         const data = await response.json();
-        console.log("Raw Gemini Response:", data);
-        
-        // Extract content from Gemini response format
         const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
         
         if (!content) {
             throw new Error('No content in Gemini response');
         }
         
-        // The AI is asked to return a JSON string, so we need to parse it.
         return JSON.parse(content);
 
     } catch (error) {

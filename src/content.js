@@ -32,7 +32,7 @@ function extractVisibleText() {
         }
 
         const text = node.textContent.trim();
-        if (text.length > 0 && !seenTexts.has(text)) {
+        if (text.length > 2 && !seenTexts.has(text)) {
             extractedContent.push({ tag: parent.tagName.toLowerCase(), text: text });
             seenTexts.add(text);
         }
