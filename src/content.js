@@ -2,50 +2,42 @@
 
 function extractVisibleText() {
     const shouldSkipElement = (el) => {
-        if (!el || !el.tagName) return true;
-        const skipTags = ['script', 'style', 'noscript', 'iframe', 'head'];
+        if (!el || el.nodeType !== Node.ELEMENT_NODE) return true;
+
+        const skipTags = ['script', 'style', 'noscript', 'iframe', 'head', 'nav', 'footer'];
         if (skipTags.includes(el.tagName.toLowerCase())) return true;
 
-        const skipClasses = ['nav', 'navigation', 'menu', 'footer', 'copyright', 'social', 'newsletter', 'header', 'banner', 'sidebar', 'advertisement', 'ad'];
-        const className = el.className?.toLowerCase() || '';
-        if (skipClasses.some(cls => className.includes(cls))) {
+        const style = window.getComputedStyle(el);
+        if (style.visibility === 'hidden' || style.display === 'none') {
             return true;
         }
-        // Skip invisible elements
-        return el.offsetParent === null && el.offsetWidth === 0 && el.offsetHeight === 0;
+
+        // Check for elements that are visually hidden but not with display:none or visibility:hidden
+        if (el.offsetWidth === 0 && el.offsetHeight === 0) {
+            return true;
+        }
+
+        return false;
     };
 
-    const getOwnText = (node) => {
-        const clone = node.cloneNode(true);
-        Array.from(clone.children).forEach(child => clone.removeChild(child));
-        return clone.textContent.replace(/\s+/g, ' ').trim();
-    };
-    
     const extractedContent = [];
     const seenTexts = new Set();
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
 
-    const traverse = (node, isRoot = false) => {
-        // Don't skip the root node based on visibility checks
-        if (!isRoot && shouldSkipElement(node)) {
-            return;
+    let node;
+    while (node = walker.nextNode()) {
+        const parent = node.parentElement;
+        if (shouldSkipElement(parent)) {
+            continue;
         }
 
-        const ownText = getOwnText(node);
-        if (ownText && ownText.length > 2 && !seenTexts.has(ownText)) {
-            extractedContent.push({ tag: node.tagName.toLowerCase(), text: ownText });
-            seenTexts.add(ownText);
+        const text = node.textContent.trim();
+        if (text.length > 0 && !seenTexts.has(text)) {
+            extractedContent.push({ tag: parent.tagName.toLowerCase(), text: text });
+            seenTexts.add(text);
         }
+    }
 
-        if (node.childNodes) {
-            node.childNodes.forEach(child => {
-                if (child.nodeType === Node.ELEMENT_NODE) {
-                    traverse(child);
-                }
-            });
-        }
-    };
-
-    traverse(document.body, true); // Start with isRoot = true
     return JSON.stringify(extractedContent, null, 2);
 }
 
