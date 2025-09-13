@@ -1,14 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Constants
+    // --- Constants and Configuration ---
     const STORAGE_KEYS = {
-        API_KEY: 'apiKey',
+        API_KEYS: 'apiKeys', // Object to hold all keys, keyed by provider
         SELECTED_MODEL: 'selectedModel',
         RECENT_CHECKS: 'recentChecks'
     };
     const DEFAULT_MODEL = 'glm-4.5';
     const MAX_RECENT_CHECKS = 5;
 
-    // Views
+    // --- UI Element References ---
     const views = {
         unconfigured: document.getElementById('unconfigured-view'),
         idle: document.getElementById('idle-view'),
@@ -16,8 +16,6 @@ document.addEventListener('DOMContentLoaded', () => {
         results: document.getElementById('results-view'),
         settings: document.getElementById('settings-view')
     };
-
-    // All Buttons
     const buttons = {
         startCheck: document.getElementById('start-check'),
         goToSettings: document.getElementById('go-to-settings-btn'),
@@ -26,48 +24,43 @@ document.addEventListener('DOMContentLoaded', () => {
         backToIdleFromSettings: document.getElementById('back-to-idle-from-settings'),
         cancelCheck: document.getElementById('cancel-check'),
         exportCsv: document.getElementById('export-csv-button'),
-        saveSettings: document.getElementById('save-settings-btn') // This is the "Save Key" button now
+        saveSettings: document.getElementById('save-settings-btn')
     };
-
-    // Settings Form Elements
     const settingsForm = {
         apiKeyInput: document.getElementById('api-key'),
         modelSelect: document.getElementById('model-select'),
         statusMessage: document.getElementById('status-message')
     };
-
-    // Other UI Elements
     const recentChecksContainer = document.getElementById('recent-checks-container');
     const progressSteps = { extract: document.getElementById('step-extract'), preprocess: document.getElementById('step-preprocess'), analyze: document.getElementById('step-analyze'), report: document.getElementById('step-report') };
     const resultsSummary = document.getElementById('results-summary');
     const resultsFilterContainer = document.getElementById('results-filter-container');
     const resultsList = document.getElementById('results-list');
 
-    // State
+    // --- State Variables ---
     let isCheckCancelled = false;
     let allIssues = [];
     let activeFilters = { severity: 'All', type: 'All' };
     let currentView = null;
-    let currentReportTimestamp = null; // To track which report is being viewed
+    let currentReportTimestamp = null;
+
+    // --- Helper Functions ---
+    const getProviderFromModel = (model) => model.split('-')[0].toLowerCase();
 
     // --- Initialization ---
     function initialize() {
-        chrome.storage.local.get(Object.values(STORAGE_KEYS), (result) => {
-            // Populate settings form
-            if (result[STORAGE_KEYS.API_KEY]) {
-                settingsForm.apiKeyInput.value = result[STORAGE_KEYS.API_KEY];
-            }
-            // Set model, defaulting to DEFAULT_MODEL if not set
-            settingsForm.modelSelect.value = result[STORAGE_KEYS.SELECTED_MODEL] || DEFAULT_MODEL;
-            // If no model was saved, save the default one now
-            if (!result[STORAGE_KEYS.SELECTED_MODEL]) {
-                chrome.storage.local.set({ [STORAGE_KEYS.SELECTED_MODEL]: DEFAULT_MODEL });
-            }
+        chrome.storage.local.get([STORAGE_KEYS.API_KEYS, STORAGE_KEYS.SELECTED_MODEL, STORAGE_KEYS.RECENT_CHECKS], (result) => {
+            const apiKeys = result[STORAGE_KEYS.API_KEYS] || {};
+            const selectedModel = result[STORAGE_KEYS.SELECTED_MODEL] || DEFAULT_MODEL;
+            const recentChecks = result[STORAGE_KEYS.RECENT_CHECKS] || [];
 
-            // Determine initial view
-            if (result[STORAGE_KEYS.API_KEY]) {
+            settingsForm.modelSelect.value = selectedModel;
+            updateApiKeyInput(selectedModel, apiKeys);
+
+            const provider = getProviderFromModel(selectedModel);
+            if (apiKeys[provider]) {
                 showView('idle');
-                renderRecentChecks(result[STORAGE_KEYS.RECENT_CHECKS] || []);
+                renderRecentChecks(recentChecks);
             } else {
                 showView('unconfigured');
             }
@@ -81,44 +74,63 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.goToSettings.addEventListener('click', () => showView('settings'));
         buttons.goToSettingsFromUnconfigured.addEventListener('click', () => showView('settings'));
         buttons.backToIdle.addEventListener('click', () => showView('idle'));
-        buttons.backToIdleFromSettings.addEventListener('click', () => {
-            chrome.storage.local.get(STORAGE_KEYS.API_KEY, (result) => {
-                if (result.apiKey) showView('idle'); else showView('unconfigured');
-            });
-        });
+        buttons.backToIdleFromSettings.addEventListener('click', handleBackFromSettings);
         buttons.cancelCheck.addEventListener('click', () => { isCheckCancelled = true; showView('idle'); });
         buttons.exportCsv.addEventListener('click', () => downloadCSV(allIssues));
         buttons.saveSettings.addEventListener('click', saveApiKey);
-
-        // Save model immediately on change
-        settingsForm.modelSelect.addEventListener('change', saveSelectedModel);
+        settingsForm.modelSelect.addEventListener('change', handleModelChange);
     }
 
     // --- Core Functions ---
-    function saveApiKey() {
-        const apiKey = settingsForm.apiKeyInput.value.trim();
-        if (!apiKey) {
+
+    async function handleModelChange() {
+        const selectedModel = settingsForm.modelSelect.value;
+        await chrome.storage.local.set({ [STORAGE_KEYS.SELECTED_MODEL]: selectedModel });
+        
+        const { [STORAGE_KEYS.API_KEYS]: apiKeys } = await chrome.storage.local.get(STORAGE_KEYS.API_KEYS);
+        updateApiKeyInput(selectedModel, apiKeys || {});
+        
+        showStatusMessage('模型已切换', 'green');
+        setTimeout(() => showStatusMessage(''), 1500);
+    }
+
+    function updateApiKeyInput(selectedModel, apiKeys) {
+        const provider = getProviderFromModel(selectedModel);
+        settingsForm.apiKeyInput.value = apiKeys[provider] || '';
+        settingsForm.apiKeyInput.placeholder = `请输入 ${provider} 模型的 Key`;
+    }
+
+    async function saveApiKey() {
+        const selectedModel = settingsForm.modelSelect.value;
+        const provider = getProviderFromModel(selectedModel);
+        const newApiKey = settingsForm.apiKeyInput.value.trim();
+
+        if (!newApiKey) {
             showStatusMessage('请输入有效的API Key。', 'red');
             return;
         }
-        chrome.storage.local.set({ [STORAGE_KEYS.API_KEY]: apiKey }, () => {
-            showStatusMessage('API Key 已保存!', 'green');
-            setTimeout(() => {
-                showStatusMessage(''); // Clear message
-                if (currentView !== 'idle') {
-                   showView('idle');
-                   initialize();
-                }
-            }, 1000);
-        });
-    }
 
-    function saveSelectedModel() {
-        const selectedModel = settingsForm.modelSelect.value;
-        chrome.storage.local.set({ [STORAGE_KEYS.SELECTED_MODEL]: selectedModel }, () => {
-            showStatusMessage('模型已切换!', 'green');
-            setTimeout(() => showStatusMessage(''), 1500);
-        });
+        const { [STORAGE_KEYS.API_KEYS]: apiKeys = {} } = await chrome.storage.local.get(STORAGE_KEYS.API_KEYS);
+        apiKeys[provider] = newApiKey;
+
+        await chrome.storage.local.set({ [STORAGE_KEYS.API_KEYS]: apiKeys });
+        
+        showStatusMessage('API Key 已保存!', 'green');
+        setTimeout(() => {
+            showStatusMessage('');
+            showView('idle');
+            initialize(); 
+        }, 1000);
+    }
+    
+    async function handleBackFromSettings() {
+        const { [STORAGE_KEYS.API_KEYS]: apiKeys, [STORAGE_KEYS.SELECTED_MODEL]: selectedModel } = await chrome.storage.local.get([STORAGE_KEYS.API_KEYS, STORAGE_KEYS.SELECTED_MODEL]);
+        const provider = getProviderFromModel(selectedModel || DEFAULT_MODEL);
+        if (apiKeys && apiKeys[provider]) {
+            showView('idle');
+        } else {
+            showView('unconfigured');
+        }
     }
 
     function startCheck() {
@@ -144,7 +156,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     allIssues = aiResponse.map(issue => ({ ...issue, completed: false }));
 
                     saveReportToHistory(currentTab, allIssues).then(updatedReports => {
-                        // The new report is the first one. Get its timestamp.
                         if (updatedReports && updatedReports.length > 0) {
                             currentReportTimestamp = updatedReports[0].timestamp;
                         }
@@ -175,14 +186,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveReportToHistory(tab, issues) {
         const storageData = await chrome.storage.local.get([STORAGE_KEYS.RECENT_CHECKS, STORAGE_KEYS.SELECTED_MODEL]);
-        let reports = storageData[STORAGE_KEYS.RECENT_CHECKS] || []; // Changed const to let
+        let reports = storageData[STORAGE_KEYS.RECENT_CHECKS] || [];
         const selectedModel = storageData[STORAGE_KEYS.SELECTED_MODEL] || DEFAULT_MODEL;
 
         const newReport = {
             title: tab.title,
             url: tab.url,
             timestamp: new Date().toISOString(),
-            model: selectedModel, // Save the model used for the check
+            model: selectedModel,
             issues: issues
         };
 
@@ -207,7 +218,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const modelTag = report.model ? `<span class="model-tag"> [模型: ${report.model}]</span>` : '';
             item.innerHTML = `<span class="recent-check-title">${report.title || '无标题'}</span><span class="recent-check-meta">${new Date(report.timestamp).toLocaleString()} - ${report.issues.length}个问题${modelTag}</span>`;
             item.addEventListener('click', () => {
-                currentReportTimestamp = report.timestamp; // Keep track of the current report
+                currentReportTimestamp = report.timestamp;
                 allIssues = report.issues;
                 setupFilters();
                 applyAndRenderResults();
@@ -284,7 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.classList.add('completed');
             }
 
-            // Correctly using backticks (`) for the template literal
             card.innerHTML = `
                 <div class="issue-header">
                     <input type="checkbox" class="issue-checkbox" data-index="${originalIndex}" ${issue.completed ? 'checked' : ''}>
@@ -336,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
             csvRows.push(row.join(','));
         });
         const csvString = csvRows.join('\r\n');
-        const blob = new Blob(["﻿" + csvString], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

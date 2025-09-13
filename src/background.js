@@ -173,16 +173,22 @@ const apiCallers = {
 // Main message listener for incoming requests from content scripts.
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "performCheck") {
-        chrome.storage.local.get(['apiKey', 'selectedModel'], async ({ apiKey, selectedModel }) => {
+        const API_KEYS_STORAGE_KEY = 'apiKeys'; // The key for the object holding all API keys
+        
+        chrome.storage.local.get([API_KEYS_STORAGE_KEY, 'selectedModel'], async ({ [API_KEYS_STORAGE_KEY]: apiKeys, selectedModel }) => {
             try {
-                if (!apiKey || !selectedModel) {
-                    throw new Error('API Key or model is not configured.');
+                if (!selectedModel) {
+                    throw new Error('No model selected.');
                 }
 
-                // Determine which API caller to use based on the model name.
                 const modelPrefix = selectedModel.split('-')[0].toLowerCase();
-                const caller = apiCallers[modelPrefix];
+                const apiKey = apiKeys?.[modelPrefix];
 
+                if (!apiKey) {
+                    throw new Error(`API Key for ${modelPrefix} models is not configured.`);
+                }
+
+                const caller = apiCallers[modelPrefix];
                 if (!caller) {
                     throw new Error(`Unsupported model selected: ${selectedModel}`);
                 }
