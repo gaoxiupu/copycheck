@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
         SELECTED_MODEL: 'selectedModel',
         RECENT_CHECKS: 'recentChecks'
     };
+    const DEFAULT_MODEL = 'glm-4.5';
     const MAX_RECENT_CHECKS = 5;
 
     // Views
@@ -25,7 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
         backToIdleFromSettings: document.getElementById('back-to-idle-from-settings'),
         cancelCheck: document.getElementById('cancel-check'),
         exportCsv: document.getElementById('export-csv-button'),
-        saveSettings: document.getElementById('save-settings-btn')
+        saveSettings: document.getElementById('save-settings-btn') // This is the "Save Key" button now
     };
 
     // Settings Form Elements
@@ -51,9 +52,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initialization ---
     function initialize() {
         chrome.storage.local.get(Object.values(STORAGE_KEYS), (result) => {
-            // Populate settings form first
-            if (result[STORAGE_KEYS.API_KEY]) settingsForm.apiKeyInput.value = result[STORAGE_KEYS.API_KEY];
-            if (result[STORAGE_KEYS.SELECTED_MODEL]) settingsForm.modelSelect.value = result[STORAGE_KEYS.SELECTED_MODEL];
+            // Populate settings form
+            if (result[STORAGE_KEYS.API_KEY]) {
+                settingsForm.apiKeyInput.value = result[STORAGE_KEYS.API_KEY];
+            }
+            // Set model, defaulting to DEFAULT_MODEL if not set
+            settingsForm.modelSelect.value = result[STORAGE_KEYS.SELECTED_MODEL] || DEFAULT_MODEL;
+            // If no model was saved, save the default one now
+            if (!result[STORAGE_KEYS.SELECTED_MODEL]) {
+                chrome.storage.local.set({ [STORAGE_KEYS.SELECTED_MODEL]: DEFAULT_MODEL });
+            }
 
             // Determine initial view
             if (result[STORAGE_KEYS.API_KEY]) {
@@ -73,33 +81,43 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.goToSettingsFromUnconfigured.addEventListener('click', () => showView('settings'));
         buttons.backToIdle.addEventListener('click', () => showView('idle'));
         buttons.backToIdleFromSettings.addEventListener('click', () => {
-             // Only go back to idle if API key is configured
             chrome.storage.local.get(STORAGE_KEYS.API_KEY, (result) => {
-                if(result.apiKey) showView('idle'); else showView('unconfigured');
+                if (result.apiKey) showView('idle'); else showView('unconfigured');
             });
         });
         buttons.cancelCheck.addEventListener('click', () => { isCheckCancelled = true; showView('idle'); });
         buttons.exportCsv.addEventListener('click', () => downloadCSV(allIssues));
-        buttons.saveSettings.addEventListener('click', saveSettings);
+        buttons.saveSettings.addEventListener('click', saveApiKey);
+
+        // Save model immediately on change
+        settingsForm.modelSelect.addEventListener('change', saveSelectedModel);
     }
 
     // --- Core Functions ---
-    function saveSettings() {
+    function saveApiKey() {
         const apiKey = settingsForm.apiKeyInput.value.trim();
-        const selectedModel = settingsForm.modelSelect.value;
         if (!apiKey) {
-            settingsForm.statusMessage.textContent = '请输入有效的API Key。';
-            settingsForm.statusMessage.style.color = 'red';
+            showStatusMessage('请输入有效的API Key。', 'red');
             return;
         }
-        chrome.storage.local.set({ [STORAGE_KEYS.API_KEY]: apiKey, [STORAGE_KEYS.SELECTED_MODEL]: selectedModel }, () => {
-            settingsForm.statusMessage.textContent = '设置已保存!';
-            settingsForm.statusMessage.style.color = 'green';
+        chrome.storage.local.set({ [STORAGE_KEYS.API_KEY]: apiKey }, () => {
+            showStatusMessage('API Key 已保存!', 'green');
             setTimeout(() => {
-                settingsForm.statusMessage.textContent = '';
-                showView('idle'); // Go back to idle view after saving
-                initialize(); // Re-initialize to load recent checks
+                showStatusMessage(''); // Clear message
+                // If this is the first time setting the key, go to idle view
+                if (currentView !== 'idle') {
+                   showView('idle');
+                   initialize(); // Re-initialize to load recent checks
+                }
             }, 1000);
+        });
+    }
+
+    function saveSelectedModel() {
+        const selectedModel = settingsForm.modelSelect.value;
+        chrome.storage.local.set({ [STORAGE_KEYS.SELECTED_MODEL]: selectedModel }, () => {
+            showStatusMessage('模型已切换!', 'green');
+            setTimeout(() => showStatusMessage(''), 1500);
         });
     }
 
@@ -145,6 +163,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function showStatusMessage(message, color) {
+        settingsForm.statusMessage.textContent = message;
+        settingsForm.statusMessage.style.color = color || 'black';
+    }
+
     async function saveReportToHistory(tab, issues) {
         const newReport = { title: tab.title, url: tab.url, timestamp: new Date().toISOString(), issues: issues };
         const result = await chrome.storage.local.get(STORAGE_KEYS.RECENT_CHECKS);
@@ -155,16 +178,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return reports;
     }
 
-    function renderRecentChecks(reports) { /* ... same as before ... */ }
-    function setupFilters() { /* ... same as before ... */ }
-    function applyAndRenderResults() { /* ... same as before ... */ }
-    function renderResults(issues) { /* ... same as before ... */ }
-    function downloadCSV(issues) { /* ... same as before ... */ }
-    function resetProgressSteps() { /* ... same as before ... */ }
-    function updateProgressStep(step, status) { /* ... same as before ... */ }
-    function handleError(userMessage, condition) { /* ... same as before ... */ }
-
-    // Re-pasting functions here to be self-contained, as I can't reference outside this block
     function renderRecentChecks(reports) {
         recentChecksContainer.innerHTML = '';
         if (!reports || reports.length === 0) return;
@@ -220,14 +233,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return btn;
         };
 
-        // Create and append severity filters
         resultsFilterContainer.appendChild(createLabel('严重等级:'));
         const severityContainer = document.createElement('div');
         severityContainer.className = 'filter-button-group';
         severities.forEach(s => severityContainer.appendChild(createBtn('severity', s)));
         resultsFilterContainer.appendChild(severityContainer);
 
-        // Create and append type filters if there are any types
         if (types.length > 1) {
             resultsFilterContainer.appendChild(createLabel('问题类型:'));
             const typeContainer = document.createElement('div');
@@ -271,7 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
             csvRows.push(row.join(','));
         });
         const csvString = csvRows.join('\r\n');
-        const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob(["﻿" + csvString], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

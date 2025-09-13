@@ -164,28 +164,40 @@ async function callGeminiAI(apiKey, model, text) {
     }
 }
 
-function isGeminiModel(model) {
-    return model && model.startsWith('gemini-');
-}
+// A mapping from model prefixes to their respective API calling functions.
+const apiCallers = {
+    'glm': callZhipuAI,
+    'gemini': callGeminiAI
+};
 
+// Main message listener for incoming requests from content scripts.
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "performCheck") {
-        chrome.storage.local.get(['apiKey', 'selectedModel'], async (result) => {
-            if (!result.apiKey) {
-                sendResponse({ error: true, message: 'API Key not found.' });
-                return;
-            }
+        chrome.storage.local.get(['apiKey', 'selectedModel'], async ({ apiKey, selectedModel }) => {
+            try {
+                if (!apiKey || !selectedModel) {
+                    throw new Error('API Key or model is not configured.');
+                }
 
-            let aiResult;
-            if (isGeminiModel(result.selectedModel)) {
-                aiResult = await callGeminiAI(result.apiKey, result.selectedModel, request.text);
-            } else {
-                aiResult = await callZhipuAI(result.apiKey, result.selectedModel, request.text);
+                // Determine which API caller to use based on the model name.
+                const modelPrefix = selectedModel.split('-')[0].toLowerCase();
+                const caller = apiCallers[modelPrefix];
+
+                if (!caller) {
+                    throw new Error(`Unsupported model selected: ${selectedModel}`);
+                }
+
+                const result = await caller(apiKey, selectedModel, request.text);
+                sendResponse(result);
+
+            } catch (error) {
+                console.error("Error during API call:", error);
+                sendResponse({ error: true, message: error.message });
             }
-            sendResponse(aiResult);
         });
-        return true; // Indicates that the response is sent asynchronously
+        return true; // Indicates that the response is sent asynchronously.
     }
+    return false; // Handle other messages if any
 });
 
 chrome.action.onClicked.addListener((tab) => {
