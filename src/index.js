@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let allIssues = [];
     let activeFilters = { severity: 'All', type: 'All' };
     let currentView = null;
+    let currentReportTimestamp = null; // To track which report is being viewed
 
     // --- Initialization ---
     function initialize() {
@@ -104,10 +105,9 @@ document.addEventListener('DOMContentLoaded', () => {
             showStatusMessage('API Key 已保存!', 'green');
             setTimeout(() => {
                 showStatusMessage(''); // Clear message
-                // If this is the first time setting the key, go to idle view
                 if (currentView !== 'idle') {
                    showView('idle');
-                   initialize(); // Re-initialize to load recent checks
+                   initialize();
                 }
             }, 1000);
         });
@@ -135,17 +135,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 updateProgressStep('preprocess', 'in-progress');
                 updateProgressStep('preprocess', 'done');
                 updateProgressStep('analyze', 'in-progress');
-                console.log('=== 传递给AI的文案内容 ===');
-                console.log('文本长度:', response.text.length, '字符');
-                console.log('文本预览 (前500字符):', response.text.substring(0, 500));
-                console.log('完整文本内容:', response.text);
                 
                 chrome.runtime.sendMessage({ action: "performCheck", text: response.text }, (aiResponse) => {
                     if (handleError(`检查失败: ${aiResponse?.message || '未知错误'}`, chrome.runtime.lastError || !aiResponse || aiResponse.error)) return;
                     updateProgressStep('analyze', 'done');
                     updateProgressStep('report', 'in-progress');
-                    allIssues = aiResponse;
-                    saveReportToHistory(currentTab, allIssues).then(renderRecentChecks);
+                    
+                    allIssues = aiResponse.map(issue => ({ ...issue, completed: false }));
+
+                    saveReportToHistory(currentTab, allIssues).then(updatedReports => {
+                        // The new report is the first one. Get its timestamp.
+                        if (updatedReports && updatedReports.length > 0) {
+                            currentReportTimestamp = updatedReports[0].timestamp;
+                        }
+                        renderRecentChecks(updatedReports);
+                    });
+
                     setupFilters();
                     applyAndRenderResults();
                     updateProgressStep('report', 'done');
@@ -169,9 +174,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function saveReportToHistory(tab, issues) {
-        const newReport = { title: tab.title, url: tab.url, timestamp: new Date().toISOString(), issues: issues };
-        const result = await chrome.storage.local.get(STORAGE_KEYS.RECENT_CHECKS);
-        let reports = result[STORAGE_KEYS.RECENT_CHECKS] || [];
+        const storageData = await chrome.storage.local.get([STORAGE_KEYS.RECENT_CHECKS, STORAGE_KEYS.SELECTED_MODEL]);
+        let reports = storageData[STORAGE_KEYS.RECENT_CHECKS] || []; // Changed const to let
+        const selectedModel = storageData[STORAGE_KEYS.SELECTED_MODEL] || DEFAULT_MODEL;
+
+        const newReport = {
+            title: tab.title,
+            url: tab.url,
+            timestamp: new Date().toISOString(),
+            model: selectedModel, // Save the model used for the check
+            issues: issues
+        };
+
         reports.unshift(newReport);
         reports = reports.slice(0, MAX_RECENT_CHECKS);
         await chrome.storage.local.set({ [STORAGE_KEYS.RECENT_CHECKS]: reports });
@@ -190,8 +204,10 @@ document.addEventListener('DOMContentLoaded', () => {
         reports.forEach(report => {
             const item = document.createElement('li');
             item.className = 'recent-check-item';
-            item.innerHTML = `<span class="recent-check-title">${report.title || '无标题'}</span><span class="recent-check-meta">${new Date(report.timestamp).toLocaleString()} - ${report.issues.length}个问题</span>`;
+            const modelTag = report.model ? `<span class="model-tag"> [模型: ${report.model}]</span>` : '';
+            item.innerHTML = `<span class="recent-check-title">${report.title || '无标题'}</span><span class="recent-check-meta">${new Date(report.timestamp).toLocaleString()} - ${report.issues.length}个问题${modelTag}</span>`;
             item.addEventListener('click', () => {
+                currentReportTimestamp = report.timestamp; // Keep track of the current report
                 allIssues = report.issues;
                 setupFilters();
                 applyAndRenderResults();
@@ -259,12 +275,50 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsList.innerHTML = '';
         resultsSummary.textContent = `总计发现 ${allIssues.length} 个问题，当前显示 ${issues.length} 个。`;
         if (allIssues.length === 0) resultsSummary.textContent = '✅ 未发现任何问题。';
+
         issues.forEach(issue => {
+            const originalIndex = allIssues.findIndex(i => i === issue);
             const card = document.createElement('div');
             card.className = `issue-card severity-${issue.severity || '轻微'}`;
-            card.innerHTML = `<h4>${issue.type || '未知类型'} <span class="severity-label">(${issue.severity || '轻微'})</span></h4><p><span class="label">描述:</span> ${issue.description || ''}</p>${issue.location ? `<p><span class="label">位置:</span> ${issue.location}</p>` : ''}${issue.suggestion ? `<p><span class="label">建议:</span> ${issue.suggestion}</p>` : ''}`;
+            if (issue.completed) {
+                card.classList.add('completed');
+            }
+
+            // Correctly using backticks (`) for the template literal
+            card.innerHTML = `
+                <div class="issue-header">
+                    <input type="checkbox" class="issue-checkbox" data-index="${originalIndex}" ${issue.completed ? 'checked' : ''}>
+                    <h4>${issue.type || '未知类型'} <span class="severity-label">(${issue.severity || '轻微'})</span></h4>
+                </div>
+                <p><span class="label">描述:</span> ${issue.description || ''}</p>
+                ${issue.location ? `<p><span class="label">位置:</span> ${issue.location}</p>` : ''}
+                ${issue.suggestion ? `<p><span class="label">建议:</span> ${issue.suggestion}</p>` : ''}
+            `;
             resultsList.appendChild(card);
         });
+
+        document.querySelectorAll('.issue-checkbox').forEach(checkbox => {
+            checkbox.addEventListener('change', toggleIssueStatus);
+        });
+    }
+
+    async function toggleIssueStatus(event) {
+        const issueIndex = parseInt(event.target.dataset.index, 10);
+        if (isNaN(issueIndex) || issueIndex < 0 || issueIndex >= allIssues.length) return;
+
+        allIssues[issueIndex].completed = !allIssues[issueIndex].completed;
+
+        if (currentReportTimestamp) {
+            const { [STORAGE_KEYS.RECENT_CHECKS]: reports } = await chrome.storage.local.get(STORAGE_KEYS.RECENT_CHECKS);
+            if (reports) {
+                const reportIndex = reports.findIndex(r => r.timestamp === currentReportTimestamp);
+                if (reportIndex !== -1) {
+                    reports[reportIndex].issues = allIssues;
+                    await chrome.storage.local.set({ [STORAGE_KEYS.RECENT_CHECKS]: reports });
+                }
+            }
+        }
+        applyAndRenderResults();
     }
 
     function downloadCSV(issues) {
