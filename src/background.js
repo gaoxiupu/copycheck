@@ -1,8 +1,6 @@
-const ZHIPU_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
-async function callZhipuAI(apiKey, model, text) {
-    const prompt = `请分析以下网页文本内容，它以JSON数组格式提供。数组中的每个对象都包含一个“tag”（HTML标签）和一个“text”（文本内容）。请根据“tag”提供的上下文（例如，“h1”是主标题，“button”是可点击的按钮）来分析“text”中的问题。
+const BASE_PROMPT = `请分析以下网页文本内容，它以JSON数组格式提供。数组中的每个对象都包含一个“tag”（HTML标签）和一个“text”（文本内容）。请根据“tag”提供的上下文（例如，“h1”是主标题，“button”是可点击的按钮）来分析“text”中的问题。
 
 请检查以下方面：
 
@@ -35,30 +33,31 @@ async function callZhipuAI(apiKey, model, text) {
     "suggestion": "将 '登入' 修改为 '登录'"
   }
 ]
-  `;
+`;
 
+async function callOpenAICompatibleAPI(apiKey, model, text, baseUrl) {
     try {
-        const response = await fetch(ZHIPU_API_URL, {
+        const response = await fetch(baseUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify({
-                model: model || "glm-4", // Use selected model, fallback to glm-4
+                model: model,
                 messages: [
-                    { role: "system", content: prompt },
+                    { role: "system", content: BASE_PROMPT },
                     { role: "user", content: `网页内容的JSON数据如下:\n${text}` }
                 ],
-                stream: false, // We want the full response at once
-                response_format: { type: "json_object" } // Request JSON output
+                stream: false,
+                response_format: { type: "json_object" }
             })
         });
 
         if (!response.ok) {
             const errorBody = await response.json();
             console.error("API Error:", errorBody);
-            throw new Error(`API request failed with status ${response.status}: ${errorBody.error.message}`);
+            throw new Error(`API request failed with status ${response.status}: ${errorBody.error?.message || 'Unknown error'}`);
         }
 
         const data = await response.json();
@@ -66,50 +65,14 @@ async function callZhipuAI(apiKey, model, text) {
         return JSON.parse(content);
 
     } catch (error) {
-        console.error('Error calling Zhipu AI:', error);
+        console.error('Error calling OpenAI Compatible AI:', error);
         return { error: true, message: error.message };
     }
 }
 
 async function callGeminiAI(apiKey, model, text) {
-    const prompt = `请分析以下网页文本内容，它以JSON数组格式提供。数组中的每个对象都包含一个“tag”（HTML标签）和一个“text”（文本内容）。请根据“tag”提供的上下文（例如，“h1”是主标题，“button”是可点击的按钮）来分析“text”中的问题。
-
-请检查以下方面：
-
-1. 拼写错误（如单词拼错：accessory 错误拼写成 accesory）
-2. 排版错误（如中英文、数字混排时的空格与符号不规范： 5V 应写为 5 V）
-3. 一致性问题（同一表达在同一页面有多种形式，如混用公制和英制单位）
-4. 其他（仅限文案表达问题，例如歧义、表述不明确等）
-
-请返回JSON格式的检查结果。要求：
-- 输出必须是一个合法的JSON对象数组，不得包含额外文字。
-- 每个对象必须包含以下字段：
-  - "type": "拼写错误" | "排版错误" | "一致性问题" | "其他"
-  - "severity": "严重" | "中等" | "轻微"
-  - "description": 对问题的具体描述
-  - "location": 问题出现的位置（请用原始文本片段）
-  - "suggestion": 修改或优化建议
-  请尽量覆盖所有发现的问题。
-
-示例:
-[
-  {
-    "type": "拼写错误",
-    "severity": "中等",
-    "description": "'登入' 可能是不规范用法，应为 '登录'",
-    "location": "登录",
-    "suggestion": "将 '登入' 修改为 '登录'"
-  }
-]
-  `;
-
     try {
-        const modelMap = {
-            'gemini-2.5-flash': 'gemini-2.5-flash',
-            'gemini-2.5-pro': 'gemini-2.5-pro'
-        };
-        
-        const geminiModel = modelMap[model] || 'gemini-2.5-flash';
+        const geminiModel = model || 'gemini-3-flash-preview';
         const url = `${GEMINI_API_URL}${geminiModel}:generateContent?key=${apiKey}`;
 
         const response = await fetch(url, {
@@ -120,7 +83,7 @@ async function callGeminiAI(apiKey, model, text) {
             body: JSON.stringify({
                 contents: [{
                     parts: [{
-                        text: `${prompt}\n\n网页内容的JSON数据如下:\n${text}`
+                        text: `${BASE_PROMPT}\n\n网页内容的JSON数据如下:\n${text}`
                     }]
                 }],
                 generationConfig: {
@@ -150,37 +113,50 @@ async function callGeminiAI(apiKey, model, text) {
     }
 }
 
-// A mapping from model prefixes to their respective API calling functions.
-const apiCallers = {
-    'glm': callZhipuAI,
-    'gemini': callGeminiAI
-};
-
 // Main message listener for incoming requests from content scripts.
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "performCheck") {
-        const API_KEYS_STORAGE_KEY = 'apiKeys'; // The key for the object holding all API keys
         
-        chrome.storage.local.get([API_KEYS_STORAGE_KEY, 'selectedModel'], async ({ [API_KEYS_STORAGE_KEY]: apiKeys, selectedModel }) => {
+        chrome.storage.local.get(['activeProvider', 'providerConfigs'], async (result) => {
             try {
-                if (!selectedModel) {
-                    throw new Error('No model selected.');
+                const activeProvider = result.activeProvider;
+                const configs = result.providerConfigs || {};
+                const currentConfig = configs[activeProvider];
+
+                if (!currentConfig || !currentConfig.apiKey || !currentConfig.modelId) {
+                    throw new Error('提供商未配置或配置不完整。');
                 }
 
-                const modelPrefix = selectedModel.split('-')[0].toLowerCase();
-                const apiKey = apiKeys?.[modelPrefix];
+                const apiKey = currentConfig.apiKey;
+                const modelId = currentConfig.modelId;
 
-                if (!apiKey) {
-                    throw new Error(`API Key for ${modelPrefix} models is not configured.`);
+                let callResult;
+
+                if (activeProvider === 'gemini') {
+                    callResult = await callGeminiAI(apiKey, modelId, request.text);
+                } else {
+                    let baseUrl = '';
+                    switch (activeProvider) {
+                        case 'zhipu':
+                            baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+                            break;
+                        case 'deepseek':
+                            baseUrl = 'https://api.deepseek.com/chat/completions';
+                            break;
+                        case 'qwen':
+                            baseUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+                            break;
+                        case 'custom':
+                            baseUrl = currentConfig.baseUrl;
+                            if (!baseUrl) throw new Error('自定义接口地址未配置。');
+                            break;
+                        default:
+                            throw new Error(`不支持的提供商: ${activeProvider}`);
+                    }
+                    callResult = await callOpenAICompatibleAPI(apiKey, modelId, request.text, baseUrl);
                 }
 
-                const caller = apiCallers[modelPrefix];
-                if (!caller) {
-                    throw new Error(`Unsupported model selected: ${selectedModel}`);
-                }
-
-                const result = await caller(apiKey, selectedModel, request.text);
-                sendResponse(result);
+                sendResponse(callResult);
 
             } catch (error) {
                 console.error("Error during API call:", error);

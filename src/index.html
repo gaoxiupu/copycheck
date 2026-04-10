@@ -62,22 +62,29 @@
                     <div class="settings-group">
                         <h2>🤖 模型配置</h2>
                         <div class="form-field">
-                            <label for="model-select">1. 选择模型:</label>
-                            <select id="model-select">
-                                <optgroup label="智谱AI">
-                                    <option value="glm-4.5">glm-4.5</option>
-                                </optgroup>
-                                <optgroup label="Google Gemini">
-                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                                </optgroup>
+                            <label for="provider-select">1. 服务商:</label>
+                            <select id="provider-select">
+                                <option value="zhipu">智谱AI (Zhipu)</option>
+                                <option value="deepseek">DeepSeek</option>
+                                <option value="qwen">阿里通义 (Qwen)</option>
+                                <option value="gemini">Google Gemini</option>
+                                <option value="custom">自定义 (OpenAI兼容)</option>
                             </select>
+                        </div>
+                        <div class="form-field" id="base-url-container" style="display: none;">
+                            <label for="base-url">接口地址 (Base URL):</label>
+                            <input type="text" id="base-url" placeholder="如: https://api.openai.com/v1/chat/completions">
+                        </div>
+                        <div class="form-field">
+                            <label for="model-id">2. 模型 ID:</label>
+                            <input type="text" id="model-id" placeholder="例如: glm-4-flash" list="model-suggestions">
+                            <datalist id="model-suggestions"></datalist>
                         </div>
                     </div>
                     <div class="settings-group">
                         <h2>🔑 API配置</h2>
                         <div class="form-field">
-                            <label for="api-key">2. 输入该模型的 API Key:</label>
+                            <label for="api-key">3. API Key:</label>
                             <input type="password" id="api-key" placeholder="请输入 API Key">
                         </div>
                         <button id="save-settings-btn">保存 Key</button>

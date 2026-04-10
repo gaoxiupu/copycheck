@@ -1,11 +1,19 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- Constants and Configuration ---
     const STORAGE_KEYS = {
-        API_KEYS: 'apiKeys', // Object to hold all keys, keyed by provider
-        SELECTED_MODEL: 'selectedModel',
+        ACTIVE_PROVIDER: 'activeProvider',
+        PROVIDER_CONFIGS: 'providerConfigs',
         RECENT_CHECKS: 'recentChecks'
     };
-    const DEFAULT_MODEL = 'glm-4.5';
+    const DEFAULT_PROVIDER = 'zhipu';
+    
+    const PROVIDER_PRESETS = {
+        zhipu: { models: ['glm-5.1', 'glm-5', 'glm-4-flash', 'glm-4.7'], defaultModel: 'glm-5.1' },
+        deepseek: { models: ['deepseek-chat', 'deepseek-reasoner'], defaultModel: 'deepseek-chat' },
+        qwen: { models: ['qwen-max', 'qwen-plus', 'qwen-turbo'], defaultModel: 'qwen-max' },
+        gemini: { models: ['gemini-3.1-pro-preview', 'gemini-3.1-flash-lite-preview', 'gemini-3-flash-preview'], defaultModel: 'gemini-3.1-pro-preview' },
+        custom: { models: [], defaultModel: '' }
+    };
     const MAX_RECENT_CHECKS = 5;
 
     // --- UI Element References ---
@@ -27,8 +35,12 @@ document.addEventListener('DOMContentLoaded', () => {
         saveSettings: document.getElementById('save-settings-btn')
     };
     const settingsForm = {
+        providerSelect: document.getElementById('provider-select'),
+        baseUrlContainer: document.getElementById('base-url-container'),
+        baseUrlInput: document.getElementById('base-url'),
+        modelIdInput: document.getElementById('model-id'),
+        modelSuggestions: document.getElementById('model-suggestions'),
         apiKeyInput: document.getElementById('api-key'),
-        modelSelect: document.getElementById('model-select'),
         statusMessage: document.getElementById('status-message')
     };
     const recentChecksContainer = document.getElementById('recent-checks-container');
@@ -45,27 +57,23 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentReportTimestamp = null;
 
     // --- Helper Functions ---
-    const getProviderFromModel = (model) => model.split('-')[0].toLowerCase();
-
     // --- Initialization ---
-    function initialize() {
-        chrome.storage.local.get([STORAGE_KEYS.API_KEYS, STORAGE_KEYS.SELECTED_MODEL, STORAGE_KEYS.RECENT_CHECKS], (result) => {
-            const apiKeys = result[STORAGE_KEYS.API_KEYS] || {};
-            const selectedModel = result[STORAGE_KEYS.SELECTED_MODEL] || DEFAULT_MODEL;
-            const recentChecks = result[STORAGE_KEYS.RECENT_CHECKS] || [];
+    async function initialize() {
+        const result = await chrome.storage.local.get([STORAGE_KEYS.ACTIVE_PROVIDER, STORAGE_KEYS.PROVIDER_CONFIGS, STORAGE_KEYS.RECENT_CHECKS]);
+        const providerConfigs = result[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
+        const activeProvider = result[STORAGE_KEYS.ACTIVE_PROVIDER] || DEFAULT_PROVIDER;
+        const recentChecks = result[STORAGE_KEYS.RECENT_CHECKS] || [];
 
-            settingsForm.modelSelect.value = selectedModel;
-            updateApiKeyInput(selectedModel, apiKeys);
+        settingsForm.providerSelect.value = activeProvider;
+        updateSettingsForm(activeProvider, providerConfigs);
 
-            const provider = getProviderFromModel(selectedModel);
-            if (apiKeys[provider]) {
-                showView('idle');
-                renderRecentChecks(recentChecks);
-            } else {
-                showView('unconfigured');
-            }
-        });
-        addEventListeners();
+        const currentConfig = providerConfigs[activeProvider];
+        if (currentConfig && currentConfig.apiKey && currentConfig.modelId) {
+            showView('idle');
+            renderRecentChecks(recentChecks);
+        } else {
+            showView('unconfigured');
+        }
     }
 
     // --- Event Listeners ---
@@ -78,44 +86,70 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.cancelCheck.addEventListener('click', () => { isCheckCancelled = true; showView('idle'); });
         buttons.exportCsv.addEventListener('click', () => downloadCSV(allIssues));
         buttons.saveSettings.addEventListener('click', saveApiKey);
-        settingsForm.modelSelect.addEventListener('change', handleModelChange);
+        settingsForm.providerSelect.addEventListener('change', handleProviderChange);
     }
 
     // --- Core Functions ---
 
-    async function handleModelChange() {
-        const selectedModel = settingsForm.modelSelect.value;
-        await chrome.storage.local.set({ [STORAGE_KEYS.SELECTED_MODEL]: selectedModel });
+    async function handleProviderChange() {
+        const selectedProvider = settingsForm.providerSelect.value;
+        const result = await chrome.storage.local.get([STORAGE_KEYS.PROVIDER_CONFIGS]);
+        const providerConfigs = result[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
         
-        const { [STORAGE_KEYS.API_KEYS]: apiKeys } = await chrome.storage.local.get(STORAGE_KEYS.API_KEYS);
-        updateApiKeyInput(selectedModel, apiKeys || {});
-        
-        showStatusMessage('模型已切换', 'green');
-        setTimeout(() => showStatusMessage(''), 1500);
+        updateSettingsForm(selectedProvider, providerConfigs);
     }
 
-    function updateApiKeyInput(selectedModel, apiKeys) {
-        const provider = getProviderFromModel(selectedModel);
-        settingsForm.apiKeyInput.value = apiKeys[provider] || '';
-        settingsForm.apiKeyInput.placeholder = `请输入 ${provider} 模型的 Key`;
+    function updateSettingsForm(provider, providerConfigs) {
+        const config = providerConfigs[provider] || {};
+        const preset = PROVIDER_PRESETS[provider] || PROVIDER_PRESETS.custom;
+        
+        // Show/hide baseUrl for custom
+        if (provider === 'custom') {
+            settingsForm.baseUrlContainer.style.display = 'block';
+            settingsForm.baseUrlInput.value = config.baseUrl || 'https://api.openai.com/v1/chat/completions';
+        } else {
+            settingsForm.baseUrlContainer.style.display = 'none';
+        }
+
+        // Fill Datalist
+        settingsForm.modelSuggestions.innerHTML = '';
+        preset.models.forEach(m => {
+            const option = document.createElement('option');
+            option.value = m;
+            settingsForm.modelSuggestions.appendChild(option);
+        });
+
+        settingsForm.modelIdInput.value = config.modelId || preset.defaultModel;
+        settingsForm.apiKeyInput.value = config.apiKey || '';
+        settingsForm.apiKeyInput.placeholder = `请输入 ${provider} 的 API Key`;
     }
 
     async function saveApiKey() {
-        const selectedModel = settingsForm.modelSelect.value;
-        const provider = getProviderFromModel(selectedModel);
+        const selectedProvider = settingsForm.providerSelect.value;
         const newApiKey = settingsForm.apiKeyInput.value.trim();
+        const newModelId = settingsForm.modelIdInput.value.trim();
+        const newBaseUrl = settingsForm.baseUrlInput.value.trim();
 
-        if (!newApiKey) {
-            showStatusMessage('请输入有效的API Key。', 'red');
+        if (!newApiKey || !newModelId) {
+            showStatusMessage('API Key 和 模型ID 不能为空。', 'red');
             return;
         }
 
-        const { [STORAGE_KEYS.API_KEYS]: apiKeys = {} } = await chrome.storage.local.get(STORAGE_KEYS.API_KEYS);
-        apiKeys[provider] = newApiKey;
-
-        await chrome.storage.local.set({ [STORAGE_KEYS.API_KEYS]: apiKeys });
+        const result = await chrome.storage.local.get([STORAGE_KEYS.PROVIDER_CONFIGS]);
+        const providerConfigs = result[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
         
-        showStatusMessage('API Key 已保存!', 'green');
+        providerConfigs[selectedProvider] = {
+            apiKey: newApiKey,
+            modelId: newModelId,
+            ...(selectedProvider === 'custom' ? { baseUrl: newBaseUrl } : {})
+        };
+
+        await chrome.storage.local.set({ 
+            [STORAGE_KEYS.PROVIDER_CONFIGS]: providerConfigs,
+            [STORAGE_KEYS.ACTIVE_PROVIDER]: selectedProvider
+        });
+        
+        showStatusMessage('配置已保存!', 'green');
         setTimeout(() => {
             showStatusMessage('');
             showView('idle');
@@ -124,9 +158,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function handleBackFromSettings() {
-        const { [STORAGE_KEYS.API_KEYS]: apiKeys, [STORAGE_KEYS.SELECTED_MODEL]: selectedModel } = await chrome.storage.local.get([STORAGE_KEYS.API_KEYS, STORAGE_KEYS.SELECTED_MODEL]);
-        const provider = getProviderFromModel(selectedModel || DEFAULT_MODEL);
-        if (apiKeys && apiKeys[provider]) {
+        const result = await chrome.storage.local.get([STORAGE_KEYS.ACTIVE_PROVIDER, STORAGE_KEYS.PROVIDER_CONFIGS]);
+        const activeProvider = result[STORAGE_KEYS.ACTIVE_PROVIDER] || DEFAULT_PROVIDER;
+        const providerConfigs = result[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
+        
+        const config = providerConfigs[activeProvider];
+        if (config && config.apiKey && config.modelId) {
             showView('idle');
         } else {
             showView('unconfigured');
@@ -141,31 +178,43 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             const currentTab = tabs[0];
             if (!currentTab) { return handleError("无法获取当前标签页信息。", true); }
-            chrome.tabs.sendMessage(currentTab.id, { action: "extractText" }, (response) => {
-                if (handleError("无法从页面提取文本。", chrome.runtime.lastError || !response)) return;
-                updateProgressStep('extract', 'done');
-                updateProgressStep('preprocess', 'in-progress');
-                updateProgressStep('preprocess', 'done');
-                updateProgressStep('analyze', 'in-progress');
-                
-                chrome.runtime.sendMessage({ action: "performCheck", text: response.text }, (aiResponse) => {
-                    if (handleError(`检查失败: ${aiResponse?.message || '未知错误'}`, chrome.runtime.lastError || !aiResponse || aiResponse.error)) return;
-                    updateProgressStep('analyze', 'done');
-                    updateProgressStep('report', 'in-progress');
-                    
-                    allIssues = aiResponse.map(issue => ({ ...issue, completed: false }));
+            if (!currentTab.url || currentTab.url.startsWith('chrome://') || currentTab.url.startsWith('chrome-extension://') || currentTab.url.startsWith('about:')) {
+                return handleError("不支持在浏览器内置页面上使用。", true);
+            }
+            // 先尝试注入 content script，确保接收端存在
+            chrome.scripting.executeScript({
+                target: { tabId: currentTab.id },
+                files: ['content.js']
+            }, () => {
+                if (chrome.runtime.lastError) {
+                    return handleError("无法注入脚本到当前页面：" + chrome.runtime.lastError.message, true);
+                }
+                chrome.tabs.sendMessage(currentTab.id, { action: "extractText" }, (response) => {
+                    if (handleError("无法从页面提取文本。", chrome.runtime.lastError || !response)) return;
+                    updateProgressStep('extract', 'done');
+                    updateProgressStep('preprocess', 'in-progress');
+                    updateProgressStep('preprocess', 'done');
+                    updateProgressStep('analyze', 'in-progress');
 
-                    saveReportToHistory(currentTab, allIssues).then(updatedReports => {
-                        if (updatedReports && updatedReports.length > 0) {
-                            currentReportTimestamp = updatedReports[0].timestamp;
-                        }
-                        renderRecentChecks(updatedReports);
+                    chrome.runtime.sendMessage({ action: "performCheck", text: response.text }, (aiResponse) => {
+                        if (handleError(`检查失败: ${aiResponse?.message || '未知错误'}`, chrome.runtime.lastError || !aiResponse || aiResponse.error)) return;
+                        updateProgressStep('analyze', 'done');
+                        updateProgressStep('report', 'in-progress');
+
+                        allIssues = aiResponse.map(issue => ({ ...issue, completed: false }));
+
+                        saveReportToHistory(currentTab, allIssues).then(updatedReports => {
+                            if (updatedReports && updatedReports.length > 0) {
+                                currentReportTimestamp = updatedReports[0].timestamp;
+                            }
+                            renderRecentChecks(updatedReports);
+                        });
+
+                        setupFilters();
+                        applyAndRenderResults();
+                        updateProgressStep('report', 'done');
+                        setTimeout(() => { if (!isCheckCancelled) showView('results'); }, 500);
                     });
-
-                    setupFilters();
-                    applyAndRenderResults();
-                    updateProgressStep('report', 'done');
-                    setTimeout(() => { if (!isCheckCancelled) showView('results'); }, 500);
                 });
             });
         });
@@ -185,9 +234,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function saveReportToHistory(tab, issues) {
-        const storageData = await chrome.storage.local.get([STORAGE_KEYS.RECENT_CHECKS, STORAGE_KEYS.SELECTED_MODEL]);
+        const storageData = await chrome.storage.local.get([STORAGE_KEYS.RECENT_CHECKS, STORAGE_KEYS.ACTIVE_PROVIDER, STORAGE_KEYS.PROVIDER_CONFIGS]);
         let reports = storageData[STORAGE_KEYS.RECENT_CHECKS] || [];
-        const selectedModel = storageData[STORAGE_KEYS.SELECTED_MODEL] || DEFAULT_MODEL;
+        const activeProvider = storageData[STORAGE_KEYS.ACTIVE_PROVIDER] || DEFAULT_PROVIDER;
+        const pc = storageData[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
+        const selectedModel = pc[activeProvider] ? pc[activeProvider].modelId : '';
 
         const newReport = {
             title: tab.title,
@@ -372,5 +423,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Initialize the extension
+    addEventListeners();
     initialize();
 });

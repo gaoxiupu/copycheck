@@ -48,12 +48,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.log(text);
         console.log('=== 文案内容长度:', text.length, '字符 ===');
         
-        // 复制到剪贴板
-        navigator.clipboard.writeText(text).then(() => {
+        // 复制到剪贴板（兼容非聚焦状态）
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
             console.log('文案内容已复制到剪贴板');
-        }).catch(err => {
+        } catch (err) {
             console.error('复制到剪贴板失败:', err);
-        });
+        }
         sendResponse({ text: text });
     }
     return true; // Indicates that the response is sent asynchronously
