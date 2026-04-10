@@ -131,7 +131,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const newBaseUrl = settingsForm.baseUrlInput.value.trim();
 
         if (!newApiKey || !newModelId) {
-            showStatusMessage('API Key 和 模型ID 不能为空。', 'red');
+            showStatusMessage('API Key 和 模型ID 不能为空。', 'error');
             return;
         }
 
@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
             [STORAGE_KEYS.ACTIVE_PROVIDER]: selectedProvider
         });
         
-        showStatusMessage('配置已保存!', 'green');
+        showStatusMessage('配置已保存!', 'success');
         setTimeout(() => {
             showStatusMessage('');
             showView('idle');
@@ -231,9 +231,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function showStatusMessage(message, color) {
+    function showStatusMessage(message, type) {
         settingsForm.statusMessage.textContent = message;
-        settingsForm.statusMessage.style.color = color || 'black';
+        settingsForm.statusMessage.className = '';
+        if (type === 'error') settingsForm.statusMessage.classList.add('status-error');
+        else if (type === 'success') settingsForm.statusMessage.classList.add('status-success');
     }
 
     async function saveReportToHistory(tab, issues) {
@@ -352,7 +354,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.innerHTML = `
                 <div class="issue-header">
                     <input type="checkbox" class="issue-checkbox" data-index="${originalIndex}" ${issue.completed ? 'checked' : ''}>
-                    <h4>${issue.type || '未知类型'} <span class="severity-label">(${issue.severity || '轻微'})</span></h4>
+                    <h4>${issue.type || '未知类型'}<span class="severity-badge severity-${issue.severity || '轻微'}">${issue.severity || '轻微'}</span></h4>
                 </div>
                 <p><span class="label">描述:</span> ${issue.description || ''}</p>
                 ${issue.location ? `<p><span class="label">位置:</span> ${issue.location}</p>` : ''}
@@ -386,7 +388,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function downloadCSV(issues) {
-        if (!issues || issues.length === 0) { alert("没有可导出的问题。"); return; }
+        if (!issues || issues.length === 0) {
+            const errorEl = document.getElementById('inline-error');
+            if (errorEl) {
+                errorEl.textContent = '没有可导出的问题。';
+                errorEl.style.display = 'block';
+                setTimeout(() => { errorEl.style.display = 'none'; }, 3000);
+            }
+            return;
+        }
         const headers = ["type", "severity", "description", "location", "suggestion"];
         const csvRows = [headers.join(',')];
         const escapeCsvCell = (cell) => {
@@ -418,8 +428,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isCheckCancelled) return true;
         if (condition) {
             console.error(userMessage, condition.message || '');
-            alert(userMessage);
+            const errorEl = document.getElementById('inline-error');
+            errorEl.textContent = userMessage;
+            errorEl.style.display = 'block';
             showView('idle');
+            setTimeout(() => { errorEl.style.display = 'none'; }, 5000);
             return true;
         }
         return false;
