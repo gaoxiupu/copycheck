@@ -178,7 +178,10 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             const currentTab = tabs[0];
             if (!currentTab) { return handleError("无法获取当前标签页信息。", true); }
-            if (!currentTab.url || currentTab.url.startsWith('chrome://') || currentTab.url.startsWith('chrome-extension://') || currentTab.url.startsWith('about:')) {
+            if (!currentTab.url) {
+                return handleError("无法获取当前页面地址，请检查扩展权限设置。", true);
+            }
+            if (currentTab.url.startsWith('chrome://') || currentTab.url.startsWith('chrome-extension://') || currentTab.url.startsWith('about:')) {
                 return handleError("不支持在浏览器内置页面上使用。", true);
             }
             // 先尝试注入 content script，确保接收端存在
