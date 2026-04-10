@@ -175,6 +175,11 @@ button#start-check:hover, button#go-to-settings-from-unconfigured-btn:hover, but
     box-shadow: 0 1px 3px oklch(0.2 0.01 250 / 0.06);
 }
 
+.issue-card.active {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 2px oklch(0.44 0.12 290 / 0.2);
+}
+
 .issue-card h4 { margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600; }
 .issue-card p { margin: 0.25rem 0; font-size: 0.875rem; color: var(--muted-foreground); line-height: 1.4; }
 .issue-card .label { font-weight: 500; color: var(--card-foreground); }
@@ -225,6 +230,16 @@ button#start-check:hover, button#go-to-settings-from-unconfigured-btn:hover, but
 .recent-check-item .recent-check-meta { display: block; font-size: 0.8rem; color: var(--muted-foreground); margin-top: 0.25rem; }
 
 /* Settings View */
+.settings-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+.settings-actions button {
+    flex: 1;
+}
+
+/* Settings View - Original */
 .settings-content { padding-top: 1rem; }
 .settings-group h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }
 .form-field { margin-bottom: 1.25rem; }

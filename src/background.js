@@ -1,5 +1,26 @@
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
+const RETRYABLE_STATUS_CODES = [429, 500, 502, 503, 504];
+const MAX_RETRIES = 2;
+
+async function withRetry(fn, retries = MAX_RETRIES) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            return await fn();
+        } catch (error) {
+            const isRetryable = RETRYABLE_STATUS_CODES.some(code => error.message.includes(`${code}`)) ||
+                                error.message.includes('Failed to fetch') ||
+                                error.message.includes('NetworkError') ||
+                                error.message.includes('network');
+
+            if (!isRetryable || attempt === retries) throw error;
+
+            const delay = (attempt + 1) * 1000;
+            await new Promise(resolve => setTimeout(resolve, delay));
+        }
+    }
+}
+
 const BASE_PROMPT = `请分析以下网页文本内容，它以JSON数组格式提供。数组中的每个对象都包含一个“tag”（HTML标签）和一个“text”（文本内容）。请根据“tag”提供的上下文（例如，“h1”是主标题，“button”是可点击的按钮）来分析“text”中的问题。
 
 请检查以下方面：
@@ -37,33 +58,34 @@ const BASE_PROMPT = `请分析以下网页文本内容，它以JSON数组格式�
 
 async function callOpenAICompatibleAPI(apiKey, model, text, baseUrl) {
     try {
-        const response = await fetch(baseUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
-            body: JSON.stringify({
-                model: model,
-                messages: [
-                    { role: "system", content: BASE_PROMPT },
-                    { role: "user", content: `网页内容的JSON数据如下:\n${text}` }
-                ],
-                stream: false,
-                response_format: { type: "json_object" }
-            })
+        return await withRetry(async () => {
+            const response = await fetch(baseUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [
+                        { role: "system", content: BASE_PROMPT },
+                        { role: "user", content: `网页内容的JSON数据如下:\n${text}` }
+                    ],
+                    stream: false,
+                    response_format: { type: "json_object" }
+                })
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json();
+                console.error("API Error:", errorBody);
+                throw new Error(`API request failed with status ${response.status}: ${errorBody.error?.message || 'Unknown error'}`);
+            }
+
+            const data = await response.json();
+            const content = data.choices[0].message.content;
+            return JSON.parse(content);
         });
-
-        if (!response.ok) {
-            const errorBody = await response.json();
-            console.error("API Error:", errorBody);
-            throw new Error(`API request failed with status ${response.status}: ${errorBody.error?.message || 'Unknown error'}`);
-        }
-
-        const data = await response.json();
-        const content = data.choices[0].message.content;
-        return JSON.parse(content);
-
     } catch (error) {
         console.error('Error calling OpenAI Compatible AI:', error);
         return { error: true, message: error.message };
@@ -72,41 +94,42 @@ async function callOpenAICompatibleAPI(apiKey, model, text, baseUrl) {
 
 async function callGeminiAI(apiKey, model, text) {
     try {
-        const geminiModel = model || 'gemini-3-flash-preview';
-        const url = `${GEMINI_API_URL}${geminiModel}:generateContent?key=${apiKey}`;
+        return await withRetry(async () => {
+            const geminiModel = model || 'gemini-3-flash-preview';
+            const url = `${GEMINI_API_URL}${geminiModel}:generateContent?key=${apiKey}`;
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: `${BASE_PROMPT}\n\n网页内容的JSON数据如下:\n${text}`
-                    }]
-                }],
-                generationConfig: {
-                    responseMimeType: "application/json"
-                }
-            })
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: `${BASE_PROMPT}\n\n网页内容的JSON数据如下:\n${text}`
+                        }]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json"
+                    }
+                })
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json();
+                console.error("Gemini API Error:", errorBody);
+                throw new Error(`Gemini API request failed with status ${response.status}: ${errorBody.error?.message || 'Unknown error'}`);
+            }
+
+            const data = await response.json();
+            const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (!content) {
+                throw new Error('No content in Gemini response');
+            }
+
+            return JSON.parse(content);
         });
-
-        if (!response.ok) {
-            const errorBody = await response.json();
-            console.error("Gemini API Error:", errorBody);
-            throw new Error(`Gemini API request failed with status ${response.status}: ${errorBody.error?.message || 'Unknown error'}`);
-        }
-
-        const data = await response.json();
-        const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        
-        if (!content) {
-            throw new Error('No content in Gemini response');
-        }
-        
-        return JSON.parse(content);
-
     } catch (error) {
         console.error('Error calling Gemini AI:', error);
         return { error: true, message: error.message };
@@ -116,7 +139,7 @@ async function callGeminiAI(apiKey, model, text) {
 // Main message listener for incoming requests from content scripts.
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "performCheck") {
-        
+
         chrome.storage.local.get(['activeProvider', 'providerConfigs'], async (result) => {
             try {
                 const activeProvider = result.activeProvider;
@@ -165,6 +188,43 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         return true; // Indicates that the response is sent asynchronously.
     }
+
+    if (request.action === "testConnection") {
+        const { provider, apiKey, modelId, baseUrl } = request;
+
+        if (!apiKey || !modelId) {
+            sendResponse({ success: false, message: 'API Key 和模型ID不能为空。' });
+            return true;
+        }
+
+        (async () => {
+            try {
+                const testText = JSON.stringify([{ tag: "p", text: "测试文本 test content" }]);
+
+                if (provider === 'gemini') {
+                    await callGeminiAI(apiKey, modelId, testText);
+                } else {
+                    let url = baseUrl;
+                    if (!url) {
+                        switch (provider) {
+                            case 'zhipu': url = 'https://open.bigmodel.cn/api/paas/v4/chat/completions'; break;
+                            case 'deepseek': url = 'https://api.deepseek.com/chat/completions'; break;
+                            case 'qwen': url = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions'; break;
+                            default:
+                                sendResponse({ success: false, message: '缺少接口地址。' });
+                                return;
+                        }
+                    }
+                    await callOpenAICompatibleAPI(apiKey, modelId, testText, url);
+                }
+                sendResponse({ success: true, message: '连接成功！API 配置正确。' });
+            } catch (error) {
+                sendResponse({ success: false, message: error.message || '连接失败。' });
+            }
+        })();
+        return true;
+    }
+
     return false; // Handle other messages if any
 });
 

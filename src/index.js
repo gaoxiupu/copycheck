@@ -32,7 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
         backToIdleFromSettings: document.getElementById('back-to-idle-from-settings'),
         cancelCheck: document.getElementById('cancel-check'),
         exportCsv: document.getElementById('export-csv-button'),
-        saveSettings: document.getElementById('save-settings-btn')
+        saveSettings: document.getElementById('save-settings-btn'),
+        testConnection: document.getElementById('test-connection-btn')
     };
     const settingsForm = {
         providerSelect: document.getElementById('provider-select'),
@@ -86,6 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.cancelCheck.addEventListener('click', () => { isCheckCancelled = true; showView('idle'); });
         buttons.exportCsv.addEventListener('click', () => downloadCSV(allIssues));
         buttons.saveSettings.addEventListener('click', saveApiKey);
+        buttons.testConnection.addEventListener('click', testConnection);
         settingsForm.providerSelect.addEventListener('change', handleProviderChange);
     }
 
@@ -153,8 +155,46 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             showStatusMessage('');
             showView('idle');
-            initialize(); 
+            initialize();
         }, 1000);
+    }
+
+    async function testConnection() {
+        const provider = settingsForm.providerSelect.value;
+        const apiKey = settingsForm.apiKeyInput.value.trim();
+        const modelId = settingsForm.modelIdInput.value.trim();
+        const baseUrl = settingsForm.baseUrlInput.value.trim();
+
+        if (!apiKey || !modelId) {
+            showStatusMessage('请先填写 API Key 和模型ID。', 'error');
+            return;
+        }
+
+        buttons.testConnection.disabled = true;
+        buttons.testConnection.textContent = '测试中...';
+        showStatusMessage('正在测试连接...', '');
+
+        chrome.runtime.sendMessage({
+            action: "testConnection",
+            provider,
+            apiKey,
+            modelId,
+            baseUrl: provider === 'custom' ? baseUrl : ''
+        }, (response) => {
+            buttons.testConnection.disabled = false;
+            buttons.testConnection.textContent = '测试连接';
+
+            if (chrome.runtime.lastError) {
+                showStatusMessage('测试失败: ' + chrome.runtime.lastError.message, 'error');
+                return;
+            }
+
+            if (response && response.success) {
+                showStatusMessage(response.message, 'success');
+            } else {
+                showStatusMessage('连接失败: ' + (response?.message || '未知错误'), 'error');
+            }
+        });
     }
     
     async function handleBackFromSettings() {
@@ -228,6 +268,14 @@ document.addEventListener('DOMContentLoaded', () => {
         currentView = viewKey;
         for (const key in views) {
             views[key].style.display = (key === viewKey) ? 'block' : 'none';
+        }
+        // Clear page highlights when leaving results view
+        if (viewKey !== 'results') {
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    chrome.tabs.sendMessage(tabs[0].id, { action: "clearHighlights" }).catch(() => {});
+                }
+            });
         }
     }
 
@@ -350,6 +398,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (issue.completed) {
                 card.classList.add('completed');
             }
+            card.dataset.index = originalIndex;
 
             card.innerHTML = `
                 <div class="issue-header">
@@ -360,11 +409,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 ${issue.location ? `<p><span class="label">位置:</span> ${issue.location}</p>` : ''}
                 ${issue.suggestion ? `<p><span class="label">建议:</span> ${issue.suggestion}</p>` : ''}
             `;
+
+            // Click card to highlight on page
+            card.addEventListener('click', (e) => {
+                if (e.target.classList.contains('issue-checkbox')) return;
+                highlightIssueOnPage(issue, card);
+            });
+
             resultsList.appendChild(card);
         });
 
         document.querySelectorAll('.issue-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', toggleIssueStatus);
+        });
+    }
+
+    function highlightIssueOnPage(issue, card) {
+        if (!issue.location) return;
+
+        // Remove active state from previous card
+        document.querySelectorAll('.issue-card.active').forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+
+        // Get current active tab dynamically (works from both fresh check and history)
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tab = tabs[0];
+            if (!tab || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://')) return;
+
+            chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                files: ['content.js']
+            }, () => {
+                if (chrome.runtime.lastError) return;
+                chrome.tabs.sendMessage(tab.id, { action: "clearHighlights" }, () => {
+                    chrome.tabs.sendMessage(tab.id, {
+                        action: "highlightIssue",
+                        text: issue.location,
+                        severity: issue.severity,
+                        description: issue.description
+                    });
+                });
+            });
         });
     }
 

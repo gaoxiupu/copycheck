@@ -1,5 +1,139 @@
 // This script is injected into the page to extract text.
 
+// --- Inject highlight styles ---
+if (!document.getElementById('pagepilot-highlight-styles')) {
+    const style = document.createElement('style');
+    style.id = 'pagepilot-highlight-styles';
+    style.textContent = `
+        mark.pagepilot-highlight {
+            padding: 1px 2px;
+            border-radius: 3px;
+            animation: pagepilot-pulse 1s ease-out 1;
+            outline: 2px solid transparent;
+            outline-offset: 1px;
+            transition: outline-color 0.3s ease;
+        }
+        mark.pagepilot-severity-严重 {
+            background: oklch(0.85 0.1 25 / 0.35);
+            outline-color: oklch(0.65 0.15 25 / 0.5);
+        }
+        mark.pagepilot-severity-中等 {
+            background: oklch(0.9 0.08 85 / 0.35);
+            outline-color: oklch(0.7 0.12 85 / 0.5);
+        }
+        mark.pagepilot-severity-轻微 {
+            background: oklch(0.9 0.06 250 / 0.3);
+            outline-color: oklch(0.65 0.1 250 / 0.5);
+        }
+        @keyframes pagepilot-pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+            100% { transform: scale(1); }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+// --- Highlight functions ---
+
+function clearHighlights() {
+    const highlights = document.querySelectorAll('mark.pagepilot-highlight');
+    highlights.forEach(mark => {
+        const parent = mark.parentNode;
+        parent.replaceChild(document.createTextNode(mark.textContent), mark);
+        parent.normalize();
+    });
+}
+
+function highlightText(searchText, severity, description) {
+    clearHighlights();
+    if (!searchText || typeof searchText !== 'string') return false;
+
+    // Build a prioritized list of terms to try matching
+    const candidates = buildSearchCandidates(searchText, description);
+
+    for (const term of candidates) {
+        const found = tryHighlight(term, severity);
+        if (found) return true;
+    }
+    return false;
+}
+
+// Extract precise error text from description (e.g., quotes like 'xxx' or "xxx")
+function buildSearchCandidates(location, description) {
+    const candidates = [];
+    const seen = new Set();
+    const add = (text) => {
+        const trimmed = text.trim();
+        if (trimmed.length >= 2 && !seen.has(trimmed)) {
+            seen.add(trimmed);
+            candidates.push(trimmed);
+        }
+    };
+
+    // 1. Extract quoted text from description (most precise - the actual error word)
+    if (description) {
+        const quoted = description.match(/[''""']([^''""']+)[''""']/g);
+        if (quoted) {
+            quoted.forEach(q => add(q.replace(/^[''""']|[''""']$/g, '')));
+        }
+    }
+
+    // 2. Full location text
+    add(location);
+
+    // 3. Location split into segments (for long multi-clause text)
+    const segments = location.split(/[，,、；;。！!？?\s]+/).filter(s => s.length >= 2);
+    segments.forEach(add);
+
+    // 4. Trailing portion of location (error often appears at the end)
+    if (location.length > 10) {
+        add(location.slice(-20));
+        add(location.slice(-10));
+    }
+
+    return candidates;
+}
+
+function tryHighlight(searchTerm, severity) {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+        acceptNode(node) {
+            const parent = node.parentElement;
+            if (!parent) return NodeFilter.FILTER_REJECT;
+            const tag = parent.tagName.toLowerCase();
+            if (['script', 'style', 'noscript', 'iframe', 'head', 'mark'].includes(tag)) return NodeFilter.FILTER_REJECT;
+            if (parent.classList.contains('pagepilot-highlight')) return NodeFilter.FILTER_REJECT;
+            if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
+            return NodeFilter.FILTER_ACCEPT;
+        }
+    });
+
+    let node;
+    while (node = walker.nextNode()) {
+        const text = node.textContent;
+        const index = text.indexOf(searchTerm);
+        if (index === -1) continue;
+
+        const parent = node.parentNode;
+        const before = text.substring(0, index);
+        const match = text.substring(index, index + searchTerm.length);
+        const after = text.substring(index + searchTerm.length);
+
+        const mark = document.createElement('mark');
+        mark.className = `pagepilot-highlight pagepilot-severity-${severity || '轻微'}`;
+        mark.textContent = match;
+
+        if (before) parent.insertBefore(document.createTextNode(before), node);
+        parent.insertBefore(mark, node);
+        if (after) parent.insertBefore(document.createTextNode(after), node);
+        parent.removeChild(node);
+
+        mark.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+        return true;
+    }
+    return false;
+}
+
 function extractVisibleText() {
     const shouldSkipElement = (el) => {
         if (!el || el.nodeType !== Node.ELEMENT_NODE) return true;
@@ -45,6 +179,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "extractText") {
         const text = extractVisibleText();
         sendResponse({ text: text });
+    } else if (request.action === "highlightIssue") {
+        const found = highlightText(request.text, request.severity, request.description);
+        sendResponse({ found });
+    } else if (request.action === "clearHighlights") {
+        clearHighlights();
+        sendResponse({ done: true });
     }
-    return true; // Indicates that the response is sent asynchronously
+    return true;
 });
