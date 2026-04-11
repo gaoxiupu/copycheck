@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function startCheck() {
+    async function startCheck() {
         isCheckCancelled = false;
         showView('inProgress');
         resetProgressSteps();
@@ -239,7 +239,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     updateProgressStep('preprocess', 'done');
                     updateProgressStep('analyze', 'in-progress');
 
-                    chrome.runtime.sendMessage({ action: "performCheck", text: response.text }, (aiResponse) => {
+                    // Build the performCheck request - handle both old single-text and new chunked format
+                    const performCheckReq = response.totalChunks > 1
+                        ? { action: "performCheck", chunks: response.chunks, totalChunks: response.totalChunks }
+                        : { action: "performCheck", text: response.text };
+
+                    chrome.runtime.sendMessage(performCheckReq, (aiResponse) => {
                         if (handleError(`检查失败: ${aiResponse?.message || '未知错误'}`, chrome.runtime.lastError || !aiResponse || aiResponse.error)) return;
                         updateProgressStep('analyze', 'done');
                         updateProgressStep('report', 'in-progress');
@@ -262,6 +267,14 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
+
+    // Listen for progress messages from background.js during multi-chunk analysis
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+        if (message.action === "analysisProgress" && currentView === 'inProgress') {
+            updateProgressStep('analyze', 'in-progress');
+            progressSteps.analyze.textContent = `正在分析第 ${message.current}/${message.total} 段...`;
+        }
+    });
 
     // --- UI & Helper Functions ---
     function showView(viewKey) {
@@ -506,7 +519,14 @@ document.addEventListener('DOMContentLoaded', () => {
         URL.revokeObjectURL(url);
     }
 
-    function resetProgressSteps() { Object.values(progressSteps).forEach(step => step.className = ''); }
+    function resetProgressSteps() {
+        Object.values(progressSteps).forEach(step => step.className = '');
+        // Reset step text to defaults
+        progressSteps.extract.textContent = '提取页面内容...';
+        progressSteps.preprocess.textContent = '文本预处理...';
+        progressSteps.analyze.textContent = 'AI智能分析...';
+        progressSteps.report.textContent = '生成报告...';
+    }
     function updateProgressStep(step, status) { if (progressSteps[step]) progressSteps[step].className = status; }
 
     function handleError(userMessage, condition) {

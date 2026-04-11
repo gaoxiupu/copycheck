@@ -134,6 +134,63 @@ function tryHighlight(searchTerm, severity) {
     return false;
 }
 
+// Estimate token count from a string.
+// Rough heuristic: JSON-encoded text length / 2 works well for mixed CN/EN content.
+function estimateTokens(str) {
+    return Math.ceil(str.length / 2);
+}
+
+const CHUNK_TOKEN_LIMIT = 20000;
+
+function chunkContent(items) {
+    const chunks = [];
+    let currentChunk = [];
+    let currentTokens = 0;
+
+    for (const item of items) {
+        const itemJson = JSON.stringify(item);
+        const itemTokens = estimateTokens(itemJson);
+
+        // If a single item exceeds the limit, split its text into smaller pieces
+        if (itemTokens > CHUNK_TOKEN_LIMIT) {
+            // Flush current chunk first
+            if (currentChunk.length > 0) {
+                chunks.push(currentChunk);
+                currentChunk = [];
+                currentTokens = 0;
+            }
+
+            // Split the oversized item's text into sub-chunks
+            const tag = item.tag;
+            const text = item.text;
+            const charsPerChunk = CHUNK_TOKEN_LIMIT * 2; // reverse of estimate: tokens * 2 ≈ chars
+            for (let i = 0; i < text.length; i += charsPerChunk) {
+                const segment = text.substring(i, i + charsPerChunk);
+                const segmentItem = { tag: tag + (i > 0 ? ` (续${Math.floor(i / charsPerChunk) + 1})` : ''), text: segment };
+                chunks.push([segmentItem]);
+            }
+            continue;
+        }
+
+        // If adding this item would exceed the limit, start a new chunk
+        if (currentTokens + itemTokens > CHUNK_TOKEN_LIMIT && currentChunk.length > 0) {
+            chunks.push(currentChunk);
+            currentChunk = [];
+            currentTokens = 0;
+        }
+
+        currentChunk.push(item);
+        currentTokens += itemTokens;
+    }
+
+    // Don't forget the last chunk
+    if (currentChunk.length > 0) {
+        chunks.push(currentChunk);
+    }
+
+    return chunks.length > 0 ? chunks : [[]];
+}
+
 function extractVisibleText() {
     const shouldSkipElement = (el) => {
         if (!el || el.nodeType !== Node.ELEMENT_NODE) return true;
@@ -172,13 +229,25 @@ function extractVisibleText() {
         }
     }
 
-    return JSON.stringify(extractedContent, null, 2);
+    // Chunk the content
+    const chunks = chunkContent(extractedContent);
+
+    // If only one chunk, return as simple text for backwards compatibility
+    if (chunks.length === 1) {
+        return { text: JSON.stringify(chunks[0], null, 2), totalChunks: 1 };
+    }
+
+    // Return multiple chunks
+    return {
+        chunks: chunks.map(c => JSON.stringify(c, null, 2)),
+        totalChunks: chunks.length
+    };
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "extractText") {
-        const text = extractVisibleText();
-        sendResponse({ text: text });
+        const result = extractVisibleText();
+        sendResponse(result);
     } else if (request.action === "highlightIssue") {
         const found = highlightText(request.text, request.severity, request.description);
         sendResponse({ found });

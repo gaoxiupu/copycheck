@@ -136,10 +136,55 @@ async function callGeminiAI(apiKey, model, text) {
     }
 }
 
+// Merge and deduplicate issues from multiple chunk results.
+// Dedup key: type + description + location
+function mergeAndDedupIssues(allResults) {
+    const seen = new Map();
+    for (const result of allResults) {
+        if (!Array.isArray(result)) continue;
+        for (const issue of result) {
+            const key = `${issue.type || ''}|${issue.description || ''}|${issue.location || ''}`;
+            if (!seen.has(key)) {
+                seen.set(key, issue);
+            }
+        }
+    }
+    return Array.from(seen.values());
+}
+
+// Call AI for a single chunk, returning parsed JSON array of issues
+async function callAIForChunk(activeProvider, currentConfig, chunkText) {
+    const apiKey = currentConfig.apiKey;
+    const modelId = currentConfig.modelId;
+
+    if (activeProvider === 'gemini') {
+        return await callGeminiAI(apiKey, modelId, chunkText);
+    } else {
+        let baseUrl = '';
+        switch (activeProvider) {
+            case 'zhipu':
+                baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+                break;
+            case 'deepseek':
+                baseUrl = 'https://api.deepseek.com/chat/completions';
+                break;
+            case 'qwen':
+                baseUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
+                break;
+            case 'custom':
+                baseUrl = currentConfig.baseUrl;
+                if (!baseUrl) throw new Error('自定义接口地址未配置。');
+                break;
+            default:
+                throw new Error(`不支持的提供商: ${activeProvider}`);
+        }
+        return await callOpenAICompatibleAPI(apiKey, modelId, chunkText, baseUrl);
+    }
+}
+
 // Main message listener for incoming requests from content scripts.
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "performCheck") {
-
         chrome.storage.local.get(['activeProvider', 'providerConfigs'], async (result) => {
             try {
                 const activeProvider = result.activeProvider;
@@ -150,36 +195,41 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     throw new Error('提供商未配置或配置不完整。');
                 }
 
-                const apiKey = currentConfig.apiKey;
-                const modelId = currentConfig.modelId;
+                const { chunks, totalChunks } = request;
 
-                let callResult;
-
-                if (activeProvider === 'gemini') {
-                    callResult = await callGeminiAI(apiKey, modelId, request.text);
-                } else {
-                    let baseUrl = '';
-                    switch (activeProvider) {
-                        case 'zhipu':
-                            baseUrl = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-                            break;
-                        case 'deepseek':
-                            baseUrl = 'https://api.deepseek.com/chat/completions';
-                            break;
-                        case 'qwen':
-                            baseUrl = 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions';
-                            break;
-                        case 'custom':
-                            baseUrl = currentConfig.baseUrl;
-                            if (!baseUrl) throw new Error('自定义接口地址未配置。');
-                            break;
-                        default:
-                            throw new Error(`不支持的提供商: ${activeProvider}`);
-                    }
-                    callResult = await callOpenAICompatibleAPI(apiKey, modelId, request.text, baseUrl);
+                // Single chunk (backwards compatible)
+                if (!chunks || totalChunks === 1) {
+                    const text = chunks ? chunks[0] : request.text;
+                    const callResult = await callAIForChunk(activeProvider, currentConfig, text);
+                    sendResponse(callResult);
+                    return;
                 }
 
-                sendResponse(callResult);
+                // Multiple chunks: loop, collect, merge
+                const allResults = [];
+                for (let i = 0; i < totalChunks; i++) {
+                    // Notify side panel of progress
+                    chrome.runtime.sendMessage({
+                        action: "analysisProgress",
+                        current: i + 1,
+                        total: totalChunks
+                    });
+
+                    const callResult = await callAIForChunk(activeProvider, currentConfig, chunks[i]);
+
+                    // Handle error responses
+                    if (callResult && callResult.error) {
+                        sendResponse(callResult);
+                        return;
+                    }
+
+                    if (Array.isArray(callResult)) {
+                        allResults.push(callResult);
+                    }
+                }
+
+                const merged = mergeAndDedupIssues(allResults);
+                sendResponse(merged);
 
             } catch (error) {
                 console.error("Error during API call:", error);
