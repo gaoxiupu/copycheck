@@ -169,6 +169,7 @@ button#start-check:hover, button#go-to-settings-from-unconfigured-btn:hover, but
     padding: 1rem;
     margin-bottom: 0.75rem;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
 }
 .issue-card:hover {
     border-color: oklch(0.85 0.015 250);
@@ -180,18 +181,50 @@ button#start-check:hover, button#go-to-settings-from-unconfigured-btn:hover, but
     box-shadow: 0 0 0 2px oklch(0.44 0.12 290 / 0.2);
 }
 
-.issue-card h4 { margin: 0 0 0.5rem 0; font-size: 1rem; font-weight: 600; }
+/* Ignore button on issue cards */
+.issue-ignore-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    background: var(--secondary);
+    color: var(--muted-foreground);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    padding: 0.2rem 0.5rem;
+    font-size: 0.75rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    z-index: 1;
+}
+.issue-card:hover .issue-ignore-btn {
+    opacity: 1;
+}
+.issue-ignore-btn:hover {
+    background: var(--accent);
+    color: var(--foreground);
+}
+.issue-ignore-btn .icon-sm {
+    width: 12px;
+    height: 12px;
+}
+
+.issue-card h4 { margin: 0; font-size: 1rem; font-weight: 600; display: inline-flex; align-items: center; }
 .issue-card p { margin: 0.25rem 0; font-size: 0.875rem; color: var(--muted-foreground); line-height: 1.4; }
 .issue-card .label { font-weight: 500; color: var(--card-foreground); }
 .severity-badge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
     font-size: 0.75rem;
     font-weight: 500;
     padding: 0.1rem 0.4rem;
     border-radius: calc(var(--radius) * 0.5);
-    vertical-align: middle;
     margin-left: 0.4rem;
     letter-spacing: 0.02em;
+    height: 1.25rem;
 }
 .severity-badge.severity-严重 { background: oklch(0.93 0.04 25); color: oklch(0.45 0.15 25); }
 .severity-badge.severity-中等 { background: oklch(0.95 0.04 75); color: oklch(0.5 0.13 75); }
@@ -285,6 +318,7 @@ button#start-check:hover, button#go-to-settings-from-unconfigured-btn:hover, but
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    margin-bottom: 0.5rem;
 }
 
 .issue-checkbox {

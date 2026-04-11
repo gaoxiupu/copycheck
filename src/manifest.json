@@ -29,6 +29,8 @@
     "service_worker": "background.js"
   },
   "host_permissions": [
+    "https://*/*",
+    "http://*/*",
     "https://open.bigmodel.cn/*",
     "https://clientservices.googleapis.com/*"
   ],

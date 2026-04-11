@@ -9,9 +9,9 @@ async function withRetry(fn, retries = MAX_RETRIES) {
             return await fn();
         } catch (error) {
             const isRetryable = RETRYABLE_STATUS_CODES.some(code => error.message.includes(`${code}`)) ||
-                                error.message.includes('Failed to fetch') ||
-                                error.message.includes('NetworkError') ||
-                                error.message.includes('network');
+                error.message.includes('Failed to fetch') ||
+                error.message.includes('NetworkError') ||
+                error.message.includes('network');
 
             if (!isRetryable || attempt === retries) throw error;
 
@@ -21,40 +21,50 @@ async function withRetry(fn, retries = MAX_RETRIES) {
     }
 }
 
-const BASE_PROMPT = `请分析以下网页文本内容，它以JSON数组格式提供。数组中的每个对象都包含一个"tag"（HTML标签）和一个"text"（文本内容）。请根据"tag"提供的上下文（例如，"h1"是主标题，"button"是可点击的按钮）来分析"text"中的问题。
+const BASE_PROMPT = `### Role
+你是一位资深的网页内容质量审计专家。你拥有极高的语言敏感度，擅长发现网页文案中细微的逻辑、格式和法律合规问题。
 
-请检查以下方面：
+### Task
+对输入的 JSON 数据（包含 tag 和 text）进行多维度审计。你必须结合 HTML 标签的语义（如 <h1> 是核心标题，<button> 是操作指令）来评估文案的得体性。
 
-1. 拼写错误（如单词拼错：accessory 错误拼写成 accesory）
-2. 排版错误（如中英文、数字混排时的空格与符号不规范： 5V 应写为 5 V）
-3. 一致性问题（同一表达在同一页面有多种形式，如混用公制和英制单位）
-4. 其他（仅限文案表达问题，例如歧义、表述不明确等）
+### Audit_Dimensions
+1. **拼写与术语**：
+   - 识别错别字、繁简体混用。
+   - 检查专有名词的大小写（如 "iPhone" 而非 "iphone"）。
+2. **排版与标点**：
+   - **盘古规范**：中文与英文、数字之间必须保留一个空格（例：使用 Gemini 1.5 而非 使用Gemini1.5）。
+   - **标点正确**：中文语境使用全角标点，英文语境使用半角；标题末尾不应有句号。
+3. **一致性**：
+   - 全局人称统一（如“你”与“您”不可混用）。
+   - 单位符号统一（如 kg, m, cm）。
+   - 操作指引统一（如“点击” vs “按一下”）。
+4. **语境适用性**：
+   - **UI 规范**：按钮文字应简洁明确；链接文字应具备描述性。
+   - **逻辑严谨**：是否存在表述模糊、前后矛盾的情况。
 
-不检查的文案内容：
-- metadata 中的文案
-- 图片 alt 文案
+### Severity_Levels
+- **严重**：导致品牌形象受损、违反法律法规、或产生严重误导。
+- **中等**：明显的错别字、标点错误、排版混乱。
+- **轻微**：建议性的风格润色、非强制性的审美优化。
 
-请返回JSON格式的检查结果。要求：
-- 输出必须是一个合法的JSON对象数组，不得包含额外文字。
-- 每个对象必须包含以下字段：
-  - "type": "拼写错误" | "排版错误" | "一致性问题" | "其他"
-  - "severity": "严重" | "中等" | "轻微"
-  - "description": 对问题的具体描述
-  - "location": 问题出现的位置（请用原始文本片段）
-  - "suggestion": 修改或优化建议
-  请尽量覆盖所有发现的问题。
+### Principles (Priority: High)
+- **非错不报**：若 suggestion 与 location 实质相同，或不确定是否为错误，严禁返回该条目。
+- **原文定位**：\`location\` 字段必须与输入 JSON 中的原始 \`text\` 片段**逐字对应**，严禁进行任何改写。
+- **不干预代码**：忽略所有代码片段、占位符（如 {{name}}）。
 
-示例:
+### Output_Format
+必须返回一个纯 JSON 数组，不含任何 Markdown 代码块标签或解释文字。结构如下：
 [
   {
-    "type": "拼写错误",
-    "severity": "中等",
-    "description": "'登入' 可能是不规范用法，应为 '登录'",
-    "location": "登录",
-    "suggestion": "将 '登入' 修改为 '登录'"
+    "type": "拼写错误" | "排版错误" | "一致性问题" | "合规风险" | "其他",
+    "severity": "严重" | "中等" | "轻微",
+    "description": "简要说明原因",
+    "location": "发现问题的原始文本片段",
+    "suggestion": "修改后的建议文本"
   }
 ]
 `;
+
 
 // Build the full prompt by appending enabled custom rules
 function buildFullPrompt(customRules) {
@@ -158,6 +168,15 @@ function mergeAndDedupIssues(allResults) {
     for (const result of allResults) {
         if (!Array.isArray(result)) continue;
         for (const issue of result) {
+            // Filter out no-op suggestions (where suggestion is identical to location)
+            if (issue.location && issue.suggestion) {
+                const loc = issue.location.trim();
+                const sug = issue.suggestion.trim();
+                // Extract possible "将 'xxx' 修改为 'yyy'" format if AI didn't follow instruction perfectly
+                // but usually they return the direct string.
+                if (loc === sug) continue;
+            }
+
             const key = `${issue.type || ''}|${issue.description || ''}|${issue.location || ''}`;
             if (!seen.has(key)) {
                 seen.set(key, issue);
@@ -297,5 +316,5 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 });
 
 chrome.action.onClicked.addListener((tab) => {
-  chrome.sidePanel.open({ windowId: tab.windowId });
+    chrome.sidePanel.open({ windowId: tab.windowId });
 });

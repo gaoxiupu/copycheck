@@ -465,6 +465,10 @@ document.addEventListener('DOMContentLoaded', () => {
             card.dataset.index = originalIndex;
 
             card.innerHTML = `
+                <button class="issue-ignore-btn" data-index="${originalIndex}" title="忽略此问题">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    忽略
+                </button>
                 <div class="issue-header">
                     <input type="checkbox" class="issue-checkbox" data-index="${originalIndex}" ${issue.completed ? 'checked' : ''}>
                     <h4>${issue.type || '未知类型'}<span class="severity-badge severity-${issue.severity || '轻微'}">${issue.severity || '轻微'}</span></h4>
@@ -477,7 +481,15 @@ document.addEventListener('DOMContentLoaded', () => {
             // Click card to highlight on page
             card.addEventListener('click', (e) => {
                 if (e.target.classList.contains('issue-checkbox')) return;
+                if (e.target.closest('.issue-ignore-btn')) return;
                 highlightIssueOnPage(issue, card);
+            });
+
+            // Ignore button handler
+            const ignoreBtn = card.querySelector('.issue-ignore-btn');
+            ignoreBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                ignoreIssue(originalIndex);
             });
 
             resultsList.appendChild(card);
@@ -486,6 +498,29 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.issue-checkbox').forEach(checkbox => {
             checkbox.addEventListener('change', toggleIssueStatus);
         });
+    }
+
+    function ignoreIssue(issueIndex) {
+        if (isNaN(issueIndex) || issueIndex < 0 || issueIndex >= allIssues.length) return;
+
+        // Remove from allIssues
+        allIssues.splice(issueIndex, 1);
+
+        // Update storage if this is from a historical report
+        if (currentReportTimestamp) {
+            chrome.storage.local.get(STORAGE_KEYS.RECENT_CHECKS).then(({ [STORAGE_KEYS.RECENT_CHECKS]: reports }) => {
+                if (reports) {
+                    const reportIndex = reports.findIndex(r => r.timestamp === currentReportTimestamp);
+                    if (reportIndex !== -1) {
+                        reports[reportIndex].issues = allIssues;
+                        chrome.storage.local.set({ [STORAGE_KEYS.RECENT_CHECKS]: reports });
+                    }
+                }
+            });
+        }
+
+        // Re-render with updated list
+        applyAndRenderResults();
     }
 
     function highlightIssueOnPage(issue, card) {
