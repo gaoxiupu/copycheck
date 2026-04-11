@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startCheck: document.getElementById('start-check'),
         goToSettings: document.getElementById('go-to-settings-btn'),
         goToSettingsFromUnconfigured: document.getElementById('go-to-settings-from-unconfigured-btn'),
+        importFromUnconfigured: document.getElementById('import-btn-unconfigured'),
         backToIdle: document.getElementById('back-to-idle'),
         backToIdleFromSettings: document.getElementById('back-to-idle-from-settings'),
         cancelCheck: document.getElementById('cancel-check'),
@@ -73,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- State Variables ---
     let isCheckCancelled = false;
     let allIssues = [];
-    let activeFilters = { severity: 'All', type: 'All' };
+    let activeFilters = { severity: '全部', type: '全部' };
     let currentView = null;
     let currentReportTimestamp = null;
     let customRules = [];  // Custom check rules (synced)
@@ -109,6 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.startCheck.addEventListener('click', startCheck);
         buttons.goToSettings.addEventListener('click', () => showView('settings'));
         buttons.goToSettingsFromUnconfigured.addEventListener('click', () => showView('settings'));
+        buttons.importFromUnconfigured.addEventListener('click', () => importFileInput.click());
         buttons.backToIdle.addEventListener('click', () => showView('idle'));
         buttons.backToIdleFromSettings.addEventListener('click', handleBackFromSettings);
         buttons.cancelCheck.addEventListener('click', () => { isCheckCancelled = true; showView('idle'); });
@@ -399,11 +401,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setupFilters() {
         resultsFilterContainer.innerHTML = '';
-        activeFilters = { severity: 'All', type: 'All' };
+        activeFilters = { severity: '全部', type: '全部' };
         if (!allIssues || allIssues.length === 0) return;
 
-        const severities = ['All', '严重', '中等', '轻微'];
-        const types = ['All', ...new Set(allIssues.map(i => i.type).filter(Boolean))];
+        const severities = ['全部', '严重', '中等', '轻微'];
+        const types = ['全部', ...new Set(allIssues.map(i => i.type).filter(Boolean))];
 
         const createLabel = (text) => {
             const label = document.createElement('p');
@@ -445,8 +447,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function applyAndRenderResults() {
         let filteredIssues = allIssues;
-        if (activeFilters.severity !== 'All') filteredIssues = filteredIssues.filter(i => i.severity === activeFilters.severity);
-        if (activeFilters.type !== 'All') filteredIssues = filteredIssues.filter(i => i.type === activeFilters.type);
+        if (activeFilters.severity !== '全部') filteredIssues = filteredIssues.filter(i => i.severity === activeFilters.severity);
+        if (activeFilters.type !== '全部') filteredIssues = filteredIssues.filter(i => i.type === activeFilters.type);
         renderResults(filteredIssues);
     }
 

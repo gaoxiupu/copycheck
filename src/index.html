@@ -1,30 +1,52 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CopyCheck</title>
     <link rel="stylesheet" href="index.css">
 </head>
+
 <body>
     <div class="container">
         <div class="header">
             <h1>CopyCheck</h1>
-            <button id="go-to-settings-btn" class="icon-button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+            <button id="go-to-settings-btn" class="icon-button"><svg class="icon" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path
+                        d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                    <circle cx="12" cy="12" r="3" />
+                </svg></button>
         </div>
         <div id="main-content">
             <!-- Unconfigured View -->
             <div id="unconfigured-view">
-                <h2><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> 需要配置</h2>
+                <h2><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                        <path d="M12 9v4" />
+                        <path d="M12 17h.01" />
+                    </svg> 需要配置</h2>
                 <p>请先配置 API Key 以开始使用</p>
-                <button id="go-to-settings-from-unconfigured-btn">设置 API Key</button>
+                <div class="unconfigured-actions" style="display: flex; gap: 0.5rem; width: 100%; margin-top: 1rem;">
+                    <button id="go-to-settings-from-unconfigured-btn" style="flex: 2;">设置 API Key</button>
+                    <button id="import-btn-unconfigured" class="secondary-button" style="flex: 1;" title="导入配置备份">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                        </svg>
+                        导入
+                    </button>
+                </div>
             </div>
 
             <!-- Idle View -->
             <div id="idle-view" style="display: none;">
-                 <div id="inline-error" class="inline-error" style="display: none;"></div>
-                 <button id="start-check">开始检查当前页面</button>
-                 <div id="recent-checks-container" class="recent-checks-container"></div>
+                <div id="inline-error" class="inline-error" style="display: none;"></div>
+                <button id="start-check">开始检查当前页面</button>
+                <div id="recent-checks-container" class="recent-checks-container"></div>
             </div>
 
             <!-- In Progress View -->
@@ -44,8 +66,12 @@
                 <div class="results-header">
                     <h3>检查结果</h3>
                     <div class="results-actions">
-                        <button id="export-csv-button" class="secondary-button">导出CSV</button>
-                        <button id="back-to-idle">< 返回</button>
+                        <button id="export-csv-button" class="secondary-button">导出问题</button>
+                        <button id="back-to-idle" class="secondary-button">
+                            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m15 18-6-6 6-6" />
+                            </svg> 返回
+                        </button>
                     </div>
                 </div>
                 <div id="results-summary"></div>
@@ -57,13 +83,29 @@
             <div id="settings-view" style="display: none;">
                 <div class="settings-header">
                     <h3>设置</h3>
-                    <button id="back-to-idle-from-settings" class="secondary-button">< 返回</button>
+                    <button id="back-to-idle-from-settings" class="secondary-button">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="m15 18-6-6 6-6" />
+                        </svg> 返回
+                    </button>
                 </div>
                 <div class="settings-content">
 
                     <!-- AI Model Card -->
                     <div class="settings-card">
-                        <h2 class="card-title"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg> AI 模型</h2>
+                        <h2 class="card-title"><svg class="icon-sm" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="4" y="4" width="16" height="16" rx="2" />
+                                <rect x="9" y="9" width="6" height="6" />
+                                <path d="M15 2v2" />
+                                <path d="M15 20v2" />
+                                <path d="M2 15h2" />
+                                <path d="M2 9h2" />
+                                <path d="M20 15h2" />
+                                <path d="M20 9h2" />
+                                <path d="M9 2v2" />
+                                <path d="M9 20v2" />
+                            </svg> AI 模型</h2>
                         <div class="form-field">
                             <label for="provider-select">服务商:</label>
                             <select id="provider-select">
@@ -76,7 +118,8 @@
                         </div>
                         <div class="form-field" id="base-url-container" style="display: none;">
                             <label for="base-url">接口地址 (Base URL):</label>
-                            <input type="text" id="base-url" placeholder="如: https://api.openai.com/v1/chat/completions">
+                            <input type="text" id="base-url"
+                                placeholder="如: https://api.openai.com/v1/chat/completions">
                         </div>
                         <div class="form-field">
                             <label for="model-id">模型 ID:</label>
@@ -96,23 +139,43 @@
 
                     <!-- Custom Rules Card -->
                     <div class="settings-card">
-                        <h2 class="card-title"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="m9 14 2 2 4-4"/></svg> 自定义检查规则</h2>
-                        <p class="rules-description">添加你希望 AI 额外检查的内容，规则会随 Chrome 账号同步。</p>
+                        <h2 class="card-title"><svg class="icon-sm" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                                <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                                <path d="m9 14 2 2 4-4" />
+                            </svg> 自定义检查规则</h2>
+                        <p class="rules-description">添加你希望 AI 额外检查或者忽略的内容。</p>
                         <div id="rules-list" class="rules-list"></div>
                         <button id="add-rule-btn" class="secondary-button rules-add-btn">+ 添加规则</button>
                     </div>
 
                     <!-- Backup Card -->
                     <div class="settings-card">
-                        <h2 class="card-title"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 数据备份</h2>
+                        <h2 class="card-title"><svg class="icon-sm" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                <polyline points="7 10 12 15 17 10" />
+                                <line x1="12" y1="15" x2="12" y2="3" />
+                            </svg> 数据备份</h2>
                         <p class="rules-description">导出设置文件以备份，重装后可通过导入恢复。包含：API 配置、自定义规则、检查历史。</p>
                         <div class="backup-actions">
                             <button id="export-btn" class="secondary-button">
-                                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="7 10 12 15 17 10" />
+                                    <line x1="12" y1="15" x2="12" y2="3" />
+                                </svg>
                                 导出备份
                             </button>
                             <button id="import-btn" class="secondary-button">
-                                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                                    <polyline points="17 8 12 3 7 8" />
+                                    <line x1="12" y1="3" x2="12" y2="15" />
+                                </svg>
                                 导入备份
                             </button>
                         </div>
@@ -128,7 +191,12 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3 id="modal-title">添加规则</h3>
-                        <button id="close-modal-btn" class="icon-button"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+                        <button id="close-modal-btn" class="icon-button"><svg class="icon" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M18 6 6 18" />
+                                <path d="m6 6 12 12" />
+                            </svg></button>
                     </div>
                     <div class="modal-body">
                         <div class="form-field">
@@ -137,7 +205,8 @@
                         </div>
                         <div class="form-field">
                             <label for="rule-prompt">检查要求:</label>
-                            <textarea id="rule-prompt" rows="5" placeholder="描述你希望 AI 检查的内容，例如：&#10;确保产品名使用 &quot;CopyCheck&quot; 而不是 &quot;Copy Check&quot;&#10;确保 &quot;AI&quot; 大写，不写 &quot;ai&quot;"></textarea>
+                            <textarea id="rule-prompt" rows="5"
+                                placeholder="描述你希望 AI 检查的内容，例如：&#10;确保产品名使用 &quot;CopyCheck&quot; 而不是 &quot;Copy Check&quot;&#10;确保 &quot;AI&quot; 大写，不写 &quot;ai&quot;"></textarea>
                         </div>
                         <div class="form-field form-field-inline">
                             <input type="checkbox" id="rule-enabled" checked>
@@ -156,4 +225,5 @@
     </div>
     <script src="index.js"></script>
 </body>
+
 </html>
