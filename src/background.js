@@ -51,6 +51,7 @@ const BASE_PROMPT = `### Role
 - **非错不报**：若 suggestion 与 location 实质相同，或不确定是否为错误，严禁返回该条目。
 - **原文定位**：\`location\` 字段必须与输入 JSON 中的原始 \`text\` 片段**逐字对应**，严禁进行任何改写。
 - **不干预代码**：忽略所有代码片段、占位符（如 {{name}}）。
+- **知识局限性**：你的知识库有截止日期。若网页内容涉及你知识库之外的新产品、新技术或未来年份（如 2025/2026 年），**严禁** 仅因其不在你的知识库内而判定为“事实错误”或“逻辑矛盾”。除非有非常明显的拼写错误，否则应优先相信网页内容的描述。
 
 ### Output_Format
 必须返回一个纯 JSON 数组，不含任何 Markdown 代码块标签或解释文字。结构如下：
@@ -68,7 +69,19 @@ const BASE_PROMPT = `### Role
 
 // Build the full prompt by appending enabled custom rules
 function buildFullPrompt(customRules) {
-    let prompt = BASE_PROMPT;
+    const now = new Date();
+    const dateStr = now.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short'
+    });
+
+    let prompt = `当前系统时间：${dateStr}\n\n${BASE_PROMPT}`;
 
     const enabledRules = (customRules || []).filter(r => r.enabled && r.prompt && r.prompt.trim());
     if (enabledRules.length > 0) {
@@ -287,9 +300,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         (async () => {
             try {
                 const testText = JSON.stringify([{ tag: "p", text: "测试文本 test content" }]);
+                const testPrompt = buildFullPrompt([]);
 
                 if (provider === 'gemini') {
-                    await callGeminiAI(apiKey, modelId, testText, BASE_PROMPT);
+                    await callGeminiAI(apiKey, modelId, testText, testPrompt);
                 } else {
                     let url = baseUrl;
                     if (!url) {
@@ -302,7 +316,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                                 return;
                         }
                     }
-                    await callOpenAICompatibleAPI(apiKey, modelId, testText, url, BASE_PROMPT);
+                    await callOpenAICompatibleAPI(apiKey, modelId, testText, url, testPrompt);
                 }
                 sendResponse({ success: true, message: '连接成功！API 配置正确。' });
             } catch (error) {
