@@ -598,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `pagepilot_report_${new Date().toISOString().slice(0,10)}.csv`;
+        a.download = `copycheck_report_${new Date().toISOString().slice(0,10)}.csv`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -801,7 +801,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const backup = {
                 version: '1.0',
-                app: 'PagePilot',
+                app: 'CopyCheck',
                 exportedAt: new Date().toISOString(),
                 data: {
                     activeProvider: syncData[STORAGE_KEYS.ACTIVE_PROVIDER] || null,
@@ -816,7 +816,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `pagepilot_backup_${new Date().toISOString().slice(0, 10)}.json`;
+            a.download = `copycheck_backup_${new Date().toISOString().slice(0, 10)}.json`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -847,7 +847,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // Validate backup structure
-            if (!backup.app || backup.app !== 'PagePilot') {
+            if (!backup.app || backup.app !== 'CopyCheck') {
                 showBackupStatus('导入失败: 无效的备份文件。', 'error');
                 return;
             }

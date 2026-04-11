@@ -1,31 +1,31 @@
 // This script is injected into the page to extract text.
 
 // --- Inject highlight styles ---
-if (!document.getElementById('pagepilot-highlight-styles')) {
+if (!document.getElementById('copycheck-highlight-styles')) {
     const style = document.createElement('style');
-    style.id = 'pagepilot-highlight-styles';
+    style.id = 'copycheck-highlight-styles';
     style.textContent = `
-        mark.pagepilot-highlight {
+        mark.copycheck-highlight {
             padding: 1px 2px;
             border-radius: 3px;
-            animation: pagepilot-pulse 1s ease-out 1;
+            animation: copycheck-pulse 1s ease-out 1;
             outline: 2px solid transparent;
             outline-offset: 1px;
             transition: outline-color 0.3s ease;
         }
-        mark.pagepilot-severity-严重 {
+        mark.copycheck-severity-严重 {
             background: oklch(0.85 0.1 25 / 0.35);
             outline-color: oklch(0.65 0.15 25 / 0.5);
         }
-        mark.pagepilot-severity-中等 {
+        mark.copycheck-severity-中等 {
             background: oklch(0.9 0.08 85 / 0.35);
             outline-color: oklch(0.7 0.12 85 / 0.5);
         }
-        mark.pagepilot-severity-轻微 {
+        mark.copycheck-severity-轻微 {
             background: oklch(0.9 0.06 250 / 0.3);
             outline-color: oklch(0.65 0.1 250 / 0.5);
         }
-        @keyframes pagepilot-pulse {
+        @keyframes copycheck-pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.02); }
             100% { transform: scale(1); }
@@ -37,7 +37,7 @@ if (!document.getElementById('pagepilot-highlight-styles')) {
 // --- Highlight functions ---
 
 function clearHighlights() {
-    const highlights = document.querySelectorAll('mark.pagepilot-highlight');
+    const highlights = document.querySelectorAll('mark.copycheck-highlight');
     highlights.forEach(mark => {
         const parent = mark.parentNode;
         parent.replaceChild(document.createTextNode(mark.textContent), mark);
@@ -102,7 +102,7 @@ function tryHighlight(searchTerm, severity) {
             if (!parent) return NodeFilter.FILTER_REJECT;
             const tag = parent.tagName.toLowerCase();
             if (['script', 'style', 'noscript', 'iframe', 'head', 'mark'].includes(tag)) return NodeFilter.FILTER_REJECT;
-            if (parent.classList.contains('pagepilot-highlight')) return NodeFilter.FILTER_REJECT;
+            if (parent.classList.contains('copycheck-highlight')) return NodeFilter.FILTER_REJECT;
             if (!node.textContent.trim()) return NodeFilter.FILTER_REJECT;
             return NodeFilter.FILTER_ACCEPT;
         }
@@ -120,7 +120,7 @@ function tryHighlight(searchTerm, severity) {
         const after = text.substring(index + searchTerm.length);
 
         const mark = document.createElement('mark');
-        mark.className = `pagepilot-highlight pagepilot-severity-${severity || '轻微'}`;
+        mark.className = `copycheck-highlight copycheck-severity-${severity || '轻微'}`;
         mark.textContent = match;
 
         if (before) parent.insertBefore(document.createTextNode(before), node);

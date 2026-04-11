@@ -1,3 +1,8 @@
 .DS_Store
 .env
 docs/
+.claude/
+.impeccable.md
+node_modules/
+dist/
+*.log

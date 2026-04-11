@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "PagePilot",
+  "name": "CopyCheck",
   "version": "1.0",
   "description": "A browser extension to check webpage content using AI.",
   "permissions": [
