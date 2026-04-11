@@ -29,7 +29,8 @@
     "service_worker": "background.js"
   },
   "host_permissions": [
-    "https://open.bigmodel.cn/*"
+    "https://open.bigmodel.cn/*",
+    "https://clientservices.googleapis.com/*"
   ],
   "content_scripts": [
     {

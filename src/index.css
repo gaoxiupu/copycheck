@@ -240,11 +240,40 @@ button#start-check:hover, button#go-to-settings-from-unconfigured-btn:hover, but
 }
 
 /* Settings View - Original */
-.settings-content { padding-top: 1rem; }
+.settings-content {
+    padding-top: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Card-based settings groups */
+.settings-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.settings-card:hover {
+    border-color: oklch(0.85 0.015 250);
+    box-shadow: 0 1px 3px oklch(0.2 0.01 250 / 0.06);
+}
+
+.settings-card .card-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+/* Remove old settings-group styles */
 .settings-group h2 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }
-.form-field { margin-bottom: 1.25rem; }
-.form-field label { display: block; margin-bottom: 0.5rem; font-weight: 500; font-size: 0.9rem; }
-.form-field input, .form-field select { width: 100%; padding: 0.6rem 0.75rem; box-sizing: border-box; border: 1px solid var(--input); border-radius: calc(var(--radius) - 2px); background-color: var(--background); color: var(--foreground); font-size: 0.9rem; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.form-field { margin-bottom: 0.85rem; }
+.form-field label { display: block; margin-bottom: 0.35rem; font-weight: 500; font-size: 0.85rem; }
+.form-field input, .form-field select { width: 100%; padding: 0.55rem 0.65rem; box-sizing: border-box; border: 1px solid var(--input); border-radius: calc(var(--radius) - 2px); background-color: var(--background); color: var(--foreground); font-size: 0.875rem; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
 .form-field input:focus, .form-field select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px oklch(0.44 0.12 290 / 0.12); }
 #status-message { margin-top: 1rem; font-size: 0.9rem; }
 #status-message.status-error { color: var(--error); }
@@ -287,3 +316,248 @@ button#start-check:hover, button#go-to-settings-from-unconfigured-btn:hover, but
         transition-duration: 0.01ms !important;
     }
 }
+
+/* --- Custom Rules Styles --- */
+
+.rules-description {
+    font-size: 0.8rem;
+    color: var(--muted-foreground);
+    margin: -0.5rem 0 1rem 0;
+    line-height: 1.4;
+}
+
+.rules-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.rule-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    transition: border-color 0.15s ease;
+}
+.rule-item:hover {
+    border-color: oklch(0.85 0.015 250);
+}
+.rule-item.disabled {
+    opacity: 0.55;
+}
+
+.rule-item-content {
+    flex: 1;
+    min-width: 0;
+    cursor: default;
+}
+.rule-item-name {
+    font-weight: 500;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.rule-item-preview {
+    font-size: 0.78rem;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 0.15rem;
+}
+
+.rule-item-actions {
+    display: flex;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+.rule-action-btn {
+    background: transparent;
+    border: none;
+    padding: 0.2rem;
+    cursor: pointer;
+    color: var(--muted-foreground);
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+.rule-action-btn:hover {
+    color: var(--foreground);
+    background: var(--accent);
+}
+.rule-action-btn .icon-sm {
+    width: 14px;
+    height: 14px;
+}
+
+.rules-add-btn {
+    width: 100%;
+    font-size: 0.85rem;
+    border-style: dashed;
+    border-width: 1px;
+}
+
+/* Rule item checkbox - smaller than issue checkbox */
+.rule-item input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    cursor: pointer;
+    accent-color: var(--brand);
+}
+
+/* Rules empty state */
+.rules-empty {
+    text-align: center;
+    padding: 1.25rem 0.5rem;
+    color: var(--muted-foreground);
+    font-size: 0.85rem;
+}
+.rules-empty svg {
+    opacity: 0.4;
+    margin-bottom: 0.4rem;
+}
+
+/* --- Modal Styles --- */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: oklch(0.15 0.02 250 / 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+    animation: modal-fade-in 0.15s ease;
+}
+
+@keyframes modal-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-content {
+    background: var(--card);
+    border-radius: var(--radius);
+    width: 100%;
+    max-width: 420px;
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 24px oklch(0.15 0.02 250 / 0.25);
+    animation: modal-slide-in 0.2s ease;
+}
+
+@keyframes modal-slide-in {
+    from { transform: translateY(8px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+.modal-header h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.modal-body {
+    padding: 1.25rem;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    border-top: 1px solid var(--border);
+}
+
+/* Textarea styling */
+.form-field textarea {
+    width: 100%;
+    padding: 0.55rem 0.65rem;
+    box-sizing: border-box;
+    border: 1px solid var(--input);
+    border-radius: calc(var(--radius) - 2px);
+    background-color: var(--background);
+    color: var(--foreground);
+    font-size: 0.85rem;
+    font-family: inherit;
+    line-height: 1.5;
+    resize: vertical;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.form-field textarea:focus {
+    outline: none;
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px oklch(0.44 0.12 290 / 0.12);
+}
+
+/* Inline form field (checkbox + label) */
+.form-field-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.form-field-inline input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+    accent-color: var(--brand);
+}
+.form-field-inline label {
+    margin-bottom: 0;
+    cursor: pointer;
+}
+
+/* Primary button */
+.primary-button {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+}
+.primary-button:hover {
+    background-color: oklch(0.3 0.03 250);
+}
+
+/* Backup actions */
+.backup-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.backup-actions button {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+}
+
+#backup-status {
+    font-size: 0.8rem;
+    margin: 0.5rem 0 0 0;
+    min-height: 1.2em;
+}
+#backup-status.status-error { color: var(--error); }
+#backup-status.status-success { color: var(--success); }

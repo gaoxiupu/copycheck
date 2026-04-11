@@ -21,7 +21,7 @@ async function withRetry(fn, retries = MAX_RETRIES) {
     }
 }
 
-const BASE_PROMPT = `请分析以下网页文本内容，它以JSON数组格式提供。数组中的每个对象都包含一个“tag”（HTML标签）和一个“text”（文本内容）。请根据“tag”提供的上下文（例如，“h1”是主标题，“button”是可点击的按钮）来分析“text”中的问题。
+const BASE_PROMPT = `请分析以下网页文本内容，它以JSON数组格式提供。数组中的每个对象都包含一个"tag"（HTML标签）和一个"text"（文本内容）。请根据"tag"提供的上下文（例如，"h1"是主标题，"button"是可点击的按钮）来分析"text"中的问题。
 
 请检查以下方面：
 
@@ -56,7 +56,22 @@ const BASE_PROMPT = `请分析以下网页文本内容，它以JSON数组格式�
 ]
 `;
 
-async function callOpenAICompatibleAPI(apiKey, model, text, baseUrl) {
+// Build the full prompt by appending enabled custom rules
+function buildFullPrompt(customRules) {
+    let prompt = BASE_PROMPT;
+
+    const enabledRules = (customRules || []).filter(r => r.enabled && r.prompt && r.prompt.trim());
+    if (enabledRules.length > 0) {
+        prompt += '\n\n--- 用户自定义检查要求（请严格遵守） ---\n';
+        enabledRules.forEach((rule, i) => {
+            prompt += `\n${i + 1}. ${rule.prompt.trim()}\n`;
+        });
+    }
+
+    return prompt;
+}
+
+async function callOpenAICompatibleAPI(apiKey, model, text, baseUrl, prompt) {
     try {
         return await withRetry(async () => {
             const response = await fetch(baseUrl, {
@@ -68,7 +83,7 @@ async function callOpenAICompatibleAPI(apiKey, model, text, baseUrl) {
                 body: JSON.stringify({
                     model: model,
                     messages: [
-                        { role: "system", content: BASE_PROMPT },
+                        { role: "system", content: prompt },
                         { role: "user", content: `网页内容的JSON数据如下:\n${text}` }
                     ],
                     stream: false,
@@ -92,7 +107,7 @@ async function callOpenAICompatibleAPI(apiKey, model, text, baseUrl) {
     }
 }
 
-async function callGeminiAI(apiKey, model, text) {
+async function callGeminiAI(apiKey, model, text, prompt) {
     try {
         return await withRetry(async () => {
             const geminiModel = model || 'gemini-3-flash-preview';
@@ -106,7 +121,7 @@ async function callGeminiAI(apiKey, model, text) {
                 body: JSON.stringify({
                     contents: [{
                         parts: [{
-                            text: `${BASE_PROMPT}\n\n网页内容的JSON数据如下:\n${text}`
+                            text: `${prompt}\n\n网页内容的JSON数据如下:\n${text}`
                         }]
                     }],
                     generationConfig: {
@@ -153,12 +168,12 @@ function mergeAndDedupIssues(allResults) {
 }
 
 // Call AI for a single chunk, returning parsed JSON array of issues
-async function callAIForChunk(activeProvider, currentConfig, chunkText) {
+async function callAIForChunk(activeProvider, currentConfig, chunkText, prompt) {
     const apiKey = currentConfig.apiKey;
     const modelId = currentConfig.modelId;
 
     if (activeProvider === 'gemini') {
-        return await callGeminiAI(apiKey, modelId, chunkText);
+        return await callGeminiAI(apiKey, modelId, chunkText, prompt);
     } else {
         let baseUrl = '';
         switch (activeProvider) {
@@ -178,17 +193,20 @@ async function callAIForChunk(activeProvider, currentConfig, chunkText) {
             default:
                 throw new Error(`不支持的提供商: ${activeProvider}`);
         }
-        return await callOpenAICompatibleAPI(apiKey, modelId, chunkText, baseUrl);
+        return await callOpenAICompatibleAPI(apiKey, modelId, chunkText, baseUrl, prompt);
     }
 }
 
 // Main message listener for incoming requests from content scripts.
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "performCheck") {
-        chrome.storage.local.get(['activeProvider', 'providerConfigs'], async (result) => {
+        chrome.storage.sync.get(['customRules', 'activeProvider', 'providerConfigs'], async (syncResult) => {
             try {
-                const activeProvider = result.activeProvider;
-                const configs = result.providerConfigs || {};
+                const customRules = syncResult.customRules || [];
+                const prompt = buildFullPrompt(customRules);
+
+                const activeProvider = syncResult.activeProvider;
+                const configs = syncResult.providerConfigs || {};
                 const currentConfig = configs[activeProvider];
 
                 if (!currentConfig || !currentConfig.apiKey || !currentConfig.modelId) {
@@ -200,7 +218,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 // Single chunk (backwards compatible)
                 if (!chunks || totalChunks === 1) {
                     const text = chunks ? chunks[0] : request.text;
-                    const callResult = await callAIForChunk(activeProvider, currentConfig, text);
+                    const callResult = await callAIForChunk(activeProvider, currentConfig, text, prompt);
                     sendResponse(callResult);
                     return;
                 }
@@ -215,7 +233,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         total: totalChunks
                     });
 
-                    const callResult = await callAIForChunk(activeProvider, currentConfig, chunks[i]);
+                    const callResult = await callAIForChunk(activeProvider, currentConfig, chunks[i], prompt);
 
                     // Handle error responses
                     if (callResult && callResult.error) {
@@ -252,7 +270,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 const testText = JSON.stringify([{ tag: "p", text: "测试文本 test content" }]);
 
                 if (provider === 'gemini') {
-                    await callGeminiAI(apiKey, modelId, testText);
+                    await callGeminiAI(apiKey, modelId, testText, BASE_PROMPT);
                 } else {
                     let url = baseUrl;
                     if (!url) {
@@ -265,7 +283,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                                 return;
                         }
                     }
-                    await callOpenAICompatibleAPI(apiKey, modelId, testText, url);
+                    await callOpenAICompatibleAPI(apiKey, modelId, testText, url, BASE_PROMPT);
                 }
                 sendResponse({ success: true, message: '连接成功！API 配置正确。' });
             } catch (error) {

@@ -3,7 +3,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const STORAGE_KEYS = {
         ACTIVE_PROVIDER: 'activeProvider',
         PROVIDER_CONFIGS: 'providerConfigs',
-        RECENT_CHECKS: 'recentChecks'
+        RECENT_CHECKS: 'recentChecks',
+        CUSTOM_RULES: 'customRules'  // synced storage
     };
     const DEFAULT_PROVIDER = 'zhipu';
     
@@ -50,23 +51,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsFilterContainer = document.getElementById('results-filter-container');
     const resultsList = document.getElementById('results-list');
 
+    // Custom Rules UI
+    const rulesList = document.getElementById('rules-list');
+    const addRuleBtn = document.getElementById('add-rule-btn');
+    const ruleModal = document.getElementById('rule-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const ruleNameInput = document.getElementById('rule-name');
+    const rulePromptInput = document.getElementById('rule-prompt');
+    const ruleEnabledInput = document.getElementById('rule-enabled');
+    const ruleEditIdInput = document.getElementById('rule-edit-id');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+    const cancelRuleBtn = document.getElementById('cancel-rule-btn');
+    const saveRuleBtn = document.getElementById('save-rule-btn');
+
+    // Backup UI
+    const exportBtn = document.getElementById('export-btn');
+    const importBtn = document.getElementById('import-btn');
+    const importFileInput = document.getElementById('import-file-input');
+    const backupStatus = document.getElementById('backup-status');
+
     // --- State Variables ---
     let isCheckCancelled = false;
     let allIssues = [];
     let activeFilters = { severity: 'All', type: 'All' };
     let currentView = null;
     let currentReportTimestamp = null;
+    let customRules = [];  // Custom check rules (synced)
 
     // --- Helper Functions ---
     // --- Initialization ---
     async function initialize() {
-        const result = await chrome.storage.local.get([STORAGE_KEYS.ACTIVE_PROVIDER, STORAGE_KEYS.PROVIDER_CONFIGS, STORAGE_KEYS.RECENT_CHECKS]);
+        const result = await chrome.storage.sync.get([STORAGE_KEYS.ACTIVE_PROVIDER, STORAGE_KEYS.PROVIDER_CONFIGS]);
         const providerConfigs = result[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
         const activeProvider = result[STORAGE_KEYS.ACTIVE_PROVIDER] || DEFAULT_PROVIDER;
-        const recentChecks = result[STORAGE_KEYS.RECENT_CHECKS] || [];
+        const localResult = await chrome.storage.local.get([STORAGE_KEYS.RECENT_CHECKS]);
+        const recentChecks = localResult[STORAGE_KEYS.RECENT_CHECKS] || [];
 
         settingsForm.providerSelect.value = activeProvider;
         updateSettingsForm(activeProvider, providerConfigs);
+
+        // Load custom rules from synced storage
+        const rulesResult = await chrome.storage.sync.get([STORAGE_KEYS.CUSTOM_RULES]);
+        customRules = rulesResult[STORAGE_KEYS.CUSTOM_RULES] || [];
+        renderRulesList();
 
         const currentConfig = providerConfigs[activeProvider];
         if (currentConfig && currentConfig.apiKey && currentConfig.modelId) {
@@ -89,13 +116,27 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.saveSettings.addEventListener('click', saveApiKey);
         buttons.testConnection.addEventListener('click', testConnection);
         settingsForm.providerSelect.addEventListener('change', handleProviderChange);
+
+        // Custom rules event listeners
+        addRuleBtn.addEventListener('click', () => openRuleModal());
+        closeModalBtn.addEventListener('click', closeRuleModal);
+        cancelRuleBtn.addEventListener('click', closeRuleModal);
+        saveRuleBtn.addEventListener('click', handleSaveRule);
+        ruleModal.addEventListener('click', (e) => {
+            if (e.target === ruleModal) closeRuleModal();
+        });
+
+        // Backup event listeners
+        exportBtn.addEventListener('click', handleExport);
+        importBtn.addEventListener('click', () => importFileInput.click());
+        importFileInput.addEventListener('change', handleImport);
     }
 
     // --- Core Functions ---
 
     async function handleProviderChange() {
         const selectedProvider = settingsForm.providerSelect.value;
-        const result = await chrome.storage.local.get([STORAGE_KEYS.PROVIDER_CONFIGS]);
+        const result = await chrome.storage.sync.get([STORAGE_KEYS.PROVIDER_CONFIGS]);
         const providerConfigs = result[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
         
         updateSettingsForm(selectedProvider, providerConfigs);
@@ -137,26 +178,34 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const result = await chrome.storage.local.get([STORAGE_KEYS.PROVIDER_CONFIGS]);
-        const providerConfigs = result[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
-        
-        providerConfigs[selectedProvider] = {
-            apiKey: newApiKey,
-            modelId: newModelId,
-            ...(selectedProvider === 'custom' ? { baseUrl: newBaseUrl } : {})
-        };
+        try {
+            const result = await chrome.storage.sync.get([STORAGE_KEYS.PROVIDER_CONFIGS]);
+            const providerConfigs = result[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
 
-        await chrome.storage.local.set({ 
-            [STORAGE_KEYS.PROVIDER_CONFIGS]: providerConfigs,
-            [STORAGE_KEYS.ACTIVE_PROVIDER]: selectedProvider
-        });
-        
-        showStatusMessage('配置已保存!', 'success');
-        setTimeout(() => {
-            showStatusMessage('');
-            showView('idle');
-            initialize();
-        }, 1000);
+            providerConfigs[selectedProvider] = {
+                apiKey: newApiKey,
+                modelId: newModelId,
+                ...(selectedProvider === 'custom' ? { baseUrl: newBaseUrl } : {})
+            };
+
+            await chrome.storage.sync.set({
+                [STORAGE_KEYS.PROVIDER_CONFIGS]: providerConfigs,
+                [STORAGE_KEYS.ACTIVE_PROVIDER]: selectedProvider
+            });
+
+            showStatusMessage('配置已保存!', 'success');
+            setTimeout(() => {
+                showStatusMessage('');
+                showView('idle');
+                initialize();
+            }, 1000);
+        } catch (err) {
+            if (err.message && err.message.includes('QUOTA')) {
+                showStatusMessage('存储空间不足，请删除不需要的配置后重试。', 'error');
+            } else {
+                showStatusMessage('保存失败: ' + err.message, 'error');
+            }
+        }
     }
 
     async function testConnection() {
@@ -198,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     async function handleBackFromSettings() {
-        const result = await chrome.storage.local.get([STORAGE_KEYS.ACTIVE_PROVIDER, STORAGE_KEYS.PROVIDER_CONFIGS]);
+        const result = await chrome.storage.sync.get([STORAGE_KEYS.ACTIVE_PROVIDER, STORAGE_KEYS.PROVIDER_CONFIGS]);
         const activeProvider = result[STORAGE_KEYS.ACTIVE_PROVIDER] || DEFAULT_PROVIDER;
         const providerConfigs = result[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
         
@@ -300,11 +349,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function saveReportToHistory(tab, issues) {
-        const storageData = await chrome.storage.local.get([STORAGE_KEYS.RECENT_CHECKS, STORAGE_KEYS.ACTIVE_PROVIDER, STORAGE_KEYS.PROVIDER_CONFIGS]);
-        let reports = storageData[STORAGE_KEYS.RECENT_CHECKS] || [];
-        const activeProvider = storageData[STORAGE_KEYS.ACTIVE_PROVIDER] || DEFAULT_PROVIDER;
-        const pc = storageData[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
+        const syncData = await chrome.storage.sync.get([STORAGE_KEYS.ACTIVE_PROVIDER, STORAGE_KEYS.PROVIDER_CONFIGS]);
+        const activeProvider = syncData[STORAGE_KEYS.ACTIVE_PROVIDER] || DEFAULT_PROVIDER;
+        const pc = syncData[STORAGE_KEYS.PROVIDER_CONFIGS] || {};
         const selectedModel = pc[activeProvider] ? pc[activeProvider].modelId : '';
+
+        const localData = await chrome.storage.local.get([STORAGE_KEYS.RECENT_CHECKS]);
+        let reports = localData[STORAGE_KEYS.RECENT_CHECKS] || [];
 
         const newReport = {
             title: tab.title,
@@ -541,6 +592,271 @@ document.addEventListener('DOMContentLoaded', () => {
             return true;
         }
         return false;
+    }
+
+    // --- Custom Rules Functions ---
+
+    function renderRulesList() {
+        rulesList.innerHTML = '';
+
+        if (customRules.length === 0) {
+            rulesList.innerHTML = `
+                <div class="rules-empty">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                    <p>暂无自定义规则</p>
+                </div>
+            `;
+            return;
+        }
+
+        customRules.forEach((rule) => {
+            const item = document.createElement('div');
+            item.className = `rule-item${rule.enabled ? '' : ' disabled'}`;
+            item.dataset.id = rule.id;
+
+            item.innerHTML = `
+                <input type="checkbox" ${rule.enabled ? 'checked' : ''} title="${rule.enabled ? '禁用' : '启用'}此规则">
+                <div class="rule-item-content">
+                    <div class="rule-item-name">${escapeHtml(rule.name)}</div>
+                    <div class="rule-item-preview">${escapeHtml(rule.prompt)}</div>
+                </div>
+                <div class="rule-item-actions">
+                    <button class="rule-action-btn edit-btn" title="编辑">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                    </button>
+                    <button class="rule-action-btn delete-btn" title="删除">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                    </button>
+                </div>
+            `;
+
+            // Toggle enable/disable
+            const checkbox = item.querySelector('input[type="checkbox"]');
+            checkbox.addEventListener('change', () => toggleRule(rule.id));
+
+            // Edit button
+            item.querySelector('.edit-btn').addEventListener('click', () => openRuleModal(rule.id));
+
+            // Delete button
+            item.querySelector('.delete-btn').addEventListener('click', () => handleDeleteRule(rule.id));
+
+            rulesList.appendChild(item);
+        });
+    }
+
+    function openRuleModal(editId = null) {
+        if (editId) {
+            const rule = customRules.find(r => r.id === editId);
+            if (!rule) return;
+            modalTitle.textContent = '编辑规则';
+            ruleNameInput.value = rule.name;
+            rulePromptInput.value = rule.prompt;
+            ruleEnabledInput.checked = rule.enabled;
+            ruleEditIdInput.value = rule.id;
+        } else {
+            modalTitle.textContent = '添加规则';
+            ruleNameInput.value = '';
+            rulePromptInput.value = '';
+            ruleEnabledInput.checked = true;
+            ruleEditIdInput.value = '';
+        }
+        ruleModal.style.display = 'flex';
+        ruleNameInput.focus();
+    }
+
+    function closeRuleModal() {
+        ruleModal.style.display = 'none';
+        ruleEditIdInput.value = '';
+    }
+
+    async function handleSaveRule() {
+        const name = ruleNameInput.value.trim();
+        const prompt = rulePromptInput.value.trim();
+        const enabled = ruleEnabledInput.checked;
+        const editId = ruleEditIdInput.value;
+
+        if (!name) {
+            ruleNameInput.focus();
+            return;
+        }
+        if (!prompt) {
+            rulePromptInput.focus();
+            return;
+        }
+
+        if (editId) {
+            // Edit existing rule
+            const index = customRules.findIndex(r => r.id === editId);
+            if (index !== -1) {
+                customRules[index] = { ...customRules[index], name, prompt, enabled };
+            }
+        } else {
+            // Add new rule
+            customRules.push({
+                id: generateRuleId(),
+                name,
+                prompt,
+                enabled
+            });
+        }
+
+        await saveRules();
+        renderRulesList();
+        closeRuleModal();
+    }
+
+    async function handleDeleteRule(id) {
+        const rule = customRules.find(r => r.id === id);
+        if (!rule) return;
+        if (!confirm(`确定删除规则「${rule.name}」吗？`)) return;
+
+        customRules = customRules.filter(r => r.id !== id);
+        await saveRules();
+        renderRulesList();
+    }
+
+    async function toggleRule(id) {
+        const rule = customRules.find(r => r.id === id);
+        if (!rule) return;
+        rule.enabled = !rule.enabled;
+        await saveRules();
+        renderRulesList();
+    }
+
+    async function saveRules() {
+        try {
+            await chrome.storage.sync.set({ [STORAGE_KEYS.CUSTOM_RULES]: customRules });
+        } catch (err) {
+            if (err.message && err.message.includes('QUOTA')) {
+                alert('存储空间不足，无法保存规则。请减少规则数量后重试。');
+            } else {
+                throw err;
+            }
+        }
+    }
+
+    function generateRuleId() {
+        return 'rule-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // --- Backup Functions ---
+
+    function showBackupStatus(message, type) {
+        backupStatus.textContent = message;
+        backupStatus.className = `status-${type}`;
+        if (type === 'success') {
+            setTimeout(() => { backupStatus.textContent = ''; backupStatus.className = ''; }, 5000);
+        }
+    }
+
+    async function handleExport() {
+        try {
+            const syncData = await chrome.storage.sync.get([
+                STORAGE_KEYS.ACTIVE_PROVIDER,
+                STORAGE_KEYS.PROVIDER_CONFIGS,
+                STORAGE_KEYS.CUSTOM_RULES
+            ]);
+            const localData = await chrome.storage.local.get([STORAGE_KEYS.RECENT_CHECKS]);
+
+            const backup = {
+                version: '1.0',
+                app: 'PagePilot',
+                exportedAt: new Date().toISOString(),
+                data: {
+                    activeProvider: syncData[STORAGE_KEYS.ACTIVE_PROVIDER] || null,
+                    providerConfigs: syncData[STORAGE_KEYS.PROVIDER_CONFIGS] || {},
+                    customRules: syncData[STORAGE_KEYS.CUSTOM_RULES] || [],
+                    recentChecks: localData[STORAGE_KEYS.RECENT_CHECKS] || []
+                }
+            };
+
+            const json = JSON.stringify(backup, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `pagepilot_backup_${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showBackupStatus('备份已导出。', 'success');
+        } catch (err) {
+            console.error('Export failed:', err);
+            showBackupStatus('导出失败: ' + err.message, 'error');
+        }
+    }
+
+    async function handleImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Reset file input so same file can be re-imported
+        importFileInput.value = '';
+
+        try {
+            const text = await file.text();
+            let backup;
+            try {
+                backup = JSON.parse(text);
+            } catch (parseErr) {
+                showBackupStatus('导入失败: 文件格式错误。', 'error');
+                return;
+            }
+
+            // Validate backup structure
+            if (!backup.app || backup.app !== 'PagePilot') {
+                showBackupStatus('导入失败: 无效的备份文件。', 'error');
+                return;
+            }
+
+            const data = backup.data || {};
+
+            // Confirm overwrite
+            const existing = await chrome.storage.sync.get([STORAGE_KEYS.ACTIVE_PROVIDER]);
+            if (existing[STORAGE_KEYS.ACTIVE_PROVIDER]) {
+                if (!confirm('导入将覆盖当前设置，是否继续？')) return;
+            }
+
+            // Write imported data — sync for config, local for history
+            const syncToWrite = {};
+            if (data.activeProvider !== undefined) syncToWrite[STORAGE_KEYS.ACTIVE_PROVIDER] = data.activeProvider;
+            if (data.providerConfigs) syncToWrite[STORAGE_KEYS.PROVIDER_CONFIGS] = data.providerConfigs;
+            if (data.customRules) syncToWrite[STORAGE_KEYS.CUSTOM_RULES] = data.customRules;
+
+            await chrome.storage.sync.set(syncToWrite);
+
+            if (data.recentChecks) {
+                await chrome.storage.local.set({ [STORAGE_KEYS.RECENT_CHECKS]: data.recentChecks });
+            }
+
+            // Reload state
+            customRules = data.customRules || [];
+            renderRulesList();
+            settingsForm.providerSelect.value = data.activeProvider || DEFAULT_PROVIDER;
+            updateSettingsForm(data.activeProvider || DEFAULT_PROVIDER, data.providerConfigs || {});
+
+            const config = (data.providerConfigs || {})[data.activeProvider];
+            if (config && config.apiKey && config.modelId) {
+                showBackupStatus(`已从备份恢复 [${backup.exportedAt ? new Date(backup.exportedAt).toLocaleString() : '未知时间'}]`, 'success');
+            } else {
+                showBackupStatus('已导入，但 API 配置不完整。', 'error');
+            }
+
+            // Reinitialize to refresh UI
+            setTimeout(() => initialize(), 300);
+
+        } catch (err) {
+            console.error('Import failed:', err);
+            showBackupStatus('导入失败: ' + err.message, 'error');
+        }
     }
 
     // Initialize the extension
