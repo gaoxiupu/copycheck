@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
         backToIdleFromSettings: document.getElementById('back-to-idle-from-settings'),
         cancelCheck: document.getElementById('cancel-check'),
         exportCsv: document.getElementById('export-csv-button'),
+        openPage: document.getElementById('open-page-button'),
         saveSettings: document.getElementById('save-settings-btn'),
         testConnection: document.getElementById('test-connection-btn')
     };
@@ -77,6 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeFilters = { severity: '全部', type: '全部' };
     let currentView = null;
     let currentReportTimestamp = null;
+    let currentReportUrl = null;
     let customRules = [];  // Custom check rules (synced)
 
     // --- Helper Functions ---
@@ -115,6 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
         buttons.backToIdleFromSettings.addEventListener('click', handleBackFromSettings);
         buttons.cancelCheck.addEventListener('click', () => { isCheckCancelled = true; showView('idle'); });
         buttons.exportCsv.addEventListener('click', () => downloadCSV(allIssues));
+        buttons.openPage.addEventListener('click', () => {
+            if (currentReportUrl) chrome.tabs.create({ url: currentReportUrl });
+        });
         buttons.saveSettings.addEventListener('click', saveApiKey);
         buttons.testConnection.addEventListener('click', testConnection);
         settingsForm.providerSelect.addEventListener('change', handleProviderChange);
@@ -301,6 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         updateProgressStep('report', 'in-progress');
 
                         allIssues = aiResponse.map(issue => ({ ...issue, completed: false }));
+                        currentReportUrl = currentTab.url;
 
                         saveReportToHistory(currentTab, allIssues).then(updatedReports => {
                             if (updatedReports && updatedReports.length > 0) {
@@ -333,6 +339,8 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const key in views) {
             views[key].style.display = (key === viewKey) ? 'block' : 'none';
         }
+        // Show/hide open-page button based on whether we have a URL
+        buttons.openPage.style.display = (viewKey === 'results' && currentReportUrl) ? 'inline-flex' : 'none';
         // Clear page highlights when leaving results view
         if (viewKey !== 'results') {
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -389,6 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
             item.innerHTML = `<span class="recent-check-title">${report.title || '无标题'}</span><span class="recent-check-meta">${new Date(report.timestamp).toLocaleString()} - ${report.issues.length}个问题${modelTag}</span>`;
             item.addEventListener('click', () => {
                 currentReportTimestamp = report.timestamp;
+                currentReportUrl = report.url || null;
                 allIssues = report.issues;
                 setupFilters();
                 applyAndRenderResults();

@@ -135,6 +135,8 @@ button#start-check:hover, button#go-to-settings-from-unconfigured-btn:hover, but
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
     padding-bottom: 0.75rem;
     margin-bottom: 1rem;
     border-bottom: 1px solid var(--border);
@@ -144,11 +146,13 @@ button#start-check:hover, button#go-to-settings-from-unconfigured-btn:hover, but
     margin: 0;
     font-size: 1.1rem;
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .results-actions {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 #results-summary {
